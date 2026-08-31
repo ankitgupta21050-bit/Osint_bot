@@ -1,7 +1,7 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║         🔥 ULTIMATE OSINT BOT — COMPLETE WORKING 🔥             ║
-║         ALL 20+ FEATURES + HYPER BOMBER + PREMIUM              ║
+║         🔥 CACHED OSINT BOT — REAL DATA + CACHE 🔥             ║
+║         API se real data → DB save → API dead → cache reply    ║
 ║         Made by: @Guptaji_302                                   ║
 ╚══════════════════════════════════════════════════════════════════╝
 """
@@ -15,64 +15,45 @@ import threading
 import requests
 import re
 import random
-import string
-import html as _html
+import hashlib
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-import platform
-import psutil
 import urllib.parse
-import queue
 
 # ==================== TELEGRAM BOT IMPORTS ====================
 try:
     import telebot
     from telebot.types import (
         ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup,
-        InlineKeyboardButton, KeyboardButtonRequestUser, BotCommand,
-        ChatMemberUpdated, CallbackQuery, Message
+        InlineKeyboardButton, KeyboardButtonRequestUser
     )
 except ImportError:
     os.system("pip install pyTelegramBotAPI==4.22.0")
     import telebot
     from telebot.types import (
         ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup,
-        InlineKeyboardButton, KeyboardButtonRequestUser, BotCommand,
-        ChatMemberUpdated, CallbackQuery, Message
+        InlineKeyboardButton, KeyboardButtonRequestUser
     )
 
-# ==================== FLASK WEB SERVER ====================
-from flask import Flask, request as flask_request, jsonify
-
+# ==================== FLASK ====================
+from flask import Flask
 app = Flask(__name__)
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/')
 def home():
     return "Bot is running ✅ | Made by @Guptaji_302", 200
 
 @app.route('/health')
 def health():
-    try:
-        db_size = os.path.getsize('bot.db') // 1024 if os.path.exists('bot.db') else 0
-        return f"OK | DB:{db_size}KB | Users:{get_user_count()} | Admins:{get_admin_count()}", 200
-    except Exception:
-        return "OK", 200
-
-@app.route('/backup-now')
-def backup_now():
-    try:
-        ok = github_upload_db()
-        return ("Backup SUCCESS!" if ok else "Backup FAILED!"), (200 if ok else 500)
-    except Exception as e:
-        return f"Error: {e}", 500
+    return "OK", 200
 
 def run_web():
     app.run(host='0.0.0.0', port=10000, use_reloader=False, threaded=True)
 
-# ==================== ENVIRONMENT VARIABLES ====================
+# ==================== ENVIRONMENT ====================
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 if not BOT_TOKEN:
-    print("❌ BOT_TOKEN environment variable set nahi hai!")
+    print("❌ BOT_TOKEN not set!")
     sys.exit(1)
 
 try:
@@ -80,30 +61,19 @@ try:
 except ValueError:
     OWNER_ID = 7545664963
 
-DB_CHANNEL = os.environ.get("DB_CHANNEL", "")
-LOGS_CHANNEL = os.environ.get("LOGS_CHANNEL", "")
-GITHUB_TOKEN = os.environ.get("GH_TOKEN", "")
-GITHUB_REPO = os.environ.get("GH_REPO", "")
-GITHUB_DB_PATH = os.environ.get("GH_DB_PATH", "database.db")
-
 FREE_CREDITS = 5
 DAILY_CREDITS = 1
 REFERRAL_CREDITS = 1
 BOT_CREDIT = "⚡ ʙᴏᴛ ᴍᴀᴅᴇ ʙʏ : @Guptaji_302"
 
-# ==================== DATABASE INIT ====================
+# ==================== DATABASE WITH CACHE TABLES ====================
 def init_db():
     global conn, c
     conn = sqlite3.connect('bot.db', check_same_thread=False, timeout=30)
     c = conn.cursor()
     
-    try:
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
-    except Exception:
-        pass
-    
     c.executescript('''
+        -- Users table
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
             username TEXT,
@@ -119,6 +89,7 @@ def init_db():
             money INTEGER DEFAULT 0
         );
         
+        -- Admins
         CREATE TABLE IF NOT EXISTS admins (
             user_id INTEGER PRIMARY KEY,
             added_by INTEGER,
@@ -126,6 +97,7 @@ def init_db():
             is_owner INTEGER DEFAULT 0
         );
         
+        -- Referrals
         CREATE TABLE IF NOT EXISTS referrals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             referrer INTEGER,
@@ -133,6 +105,7 @@ def init_db():
             date TEXT
         );
         
+        -- Search History
         CREATE TABLE IF NOT EXISTS search_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -142,12 +115,14 @@ def init_db():
             result TEXT
         );
         
+        -- Daily Claims
         CREATE TABLE IF NOT EXISTS daily_claims (
             user_id INTEGER,
             claim_date TEXT,
             PRIMARY KEY (user_id, claim_date)
         );
         
+        -- Redeem Codes
         CREATE TABLE IF NOT EXISTS redeem_codes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             code TEXT UNIQUE,
@@ -160,6 +135,7 @@ def init_db():
             is_active INTEGER DEFAULT 1
         );
         
+        -- Redeemed Users
         CREATE TABLE IF NOT EXISTS redeemed_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -167,124 +143,7 @@ def init_db():
             redeemed_at TEXT
         );
         
-        CREATE TABLE IF NOT EXISTS force_join_channels (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            link TEXT UNIQUE,
-            username TEXT,
-            added_by INTEGER,
-            added_date TEXT,
-            channel_type TEXT DEFAULT 'channel'
-        );
-        
-        CREATE TABLE IF NOT EXISTS bot_groups (
-            group_id INTEGER PRIMARY KEY,
-            group_title TEXT,
-            number_info_enabled INTEGER DEFAULT 1,
-            userid_info_enabled INTEGER DEFAULT 1,
-            username_info_enabled INTEGER DEFAULT 1,
-            aadhar_info_enabled INTEGER DEFAULT 1,
-            instagram_info_enabled INTEGER DEFAULT 1,
-            ifsc_info_enabled INTEGER DEFAULT 1,
-            vehicle_info_enabled INTEGER DEFAULT 1,
-            welcome_enabled INTEGER DEFAULT 1,
-            welcome_message TEXT,
-            welcome_rules TEXT DEFAULT '',
-            goodbye_enabled INTEGER DEFAULT 1,
-            goodbye_message TEXT,
-            welcome_photo_file_id TEXT,
-            gst_info_enabled INTEGER DEFAULT 1,
-            email_info_enabled INTEGER DEFAULT 1,
-            pan_info_enabled INTEGER DEFAULT 1,
-            pak_num_info_enabled INTEGER DEFAULT 1,
-            ff_info_enabled INTEGER DEFAULT 1,
-            pincode_info_enabled INTEGER DEFAULT 1,
-            hitek_info_enabled INTEGER DEFAULT 1,
-            tg_bomber_enabled INTEGER DEFAULT 1,
-            bomber_enabled INTEGER DEFAULT 1,
-            free_info_mode INTEGER DEFAULT 0,
-            added_date TEXT,
-            last_active TEXT
-        );
-        
-        CREATE TABLE IF NOT EXISTS feature_costs (
-            feature_key TEXT PRIMARY KEY,
-            cost INTEGER DEFAULT 1
-        );
-        
-        CREATE TABLE IF NOT EXISTS feature_maintenance (
-            feature_key TEXT PRIMARY KEY,
-            is_under_maintenance INTEGER DEFAULT 0,
-            reason TEXT DEFAULT '',
-            set_by INTEGER DEFAULT 0,
-            set_at TEXT DEFAULT ''
-        );
-        
-        CREATE TABLE IF NOT EXISTS welcome_settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            emoji TEXT DEFAULT '❤️',
-            caption TEXT DEFAULT 'ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ɪɴꜰᴏʀᴍᴀᴛɪᴏɴ ʙᴏᴛ!',
-            image_file_id TEXT,
-            video_file_id TEXT,
-            bot_dp_file_id TEXT,
-            first_time_sticker TEXT,
-            is_default INTEGER DEFAULT 1
-        );
-        
-        CREATE TABLE IF NOT EXISTS logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            action TEXT,
-            details TEXT,
-            timestamp TEXT
-        );
-        
-        CREATE TABLE IF NOT EXISTS clone_bots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            token TEXT UNIQUE,
-            status TEXT DEFAULT 'pending',
-            requested_at TEXT,
-            approved_at TEXT,
-            is_manually_stopped INTEGER DEFAULT 0
-        );
-        
-        CREATE TABLE IF NOT EXISTS clone_admins (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            clone_token TEXT,
-            admin_user_id INTEGER,
-            added_by INTEGER,
-            added_date TEXT,
-            UNIQUE(clone_token, admin_user_id)
-        );
-        
-        CREATE TABLE IF NOT EXISTS clone_force_join (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            clone_token TEXT,
-            link TEXT,
-            username TEXT,
-            channel_type TEXT DEFAULT 'channel',
-            added_by INTEGER,
-            added_date TEXT,
-            UNIQUE(clone_token, link)
-        );
-        
-        CREATE TABLE IF NOT EXISTS clone_users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            clone_token TEXT NOT NULL,
-            user_id INTEGER NOT NULL,
-            username TEXT DEFAULT '',
-            first_name TEXT DEFAULT '',
-            join_date TEXT,
-            referrer INTEGER,
-            credits INTEGER DEFAULT 10,
-            is_blocked INTEGER DEFAULT 0,
-            is_premium INTEGER DEFAULT 0,
-            premium_until TEXT,
-            total_searches INTEGER DEFAULT 0,
-            last_active TEXT,
-            UNIQUE(clone_token, user_id)
-        );
-        
+        -- Bomber History
         CREATE TABLE IF NOT EXISTS bomber_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -296,44 +155,109 @@ def init_db():
             stopped_at TEXT
         );
         
-        CREATE TABLE IF NOT EXISTS api_config (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            feature TEXT UNIQUE NOT NULL,
-            base_url TEXT NOT NULL,
-            action_param TEXT NOT NULL,
-            query_param TEXT NOT NULL,
-            api_key TEXT NOT NULL,
-            is_enabled INTEGER DEFAULT 1,
-            timeout INTEGER DEFAULT 20,
+        -- ========== CACHE TABLES ==========
+        -- Number Cache
+        CREATE TABLE IF NOT EXISTS cache_number (
+            number TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            hit_count INTEGER DEFAULT 0
+        );
+        
+        -- Aadhar Cache
+        CREATE TABLE IF NOT EXISTS cache_aadhar (
+            aadhar TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            hit_count INTEGER DEFAULT 0
+        );
+        
+        -- UPI Cache
+        CREATE TABLE IF NOT EXISTS cache_upi (
+            upi TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            hit_count INTEGER DEFAULT 0
+        );
+        
+        -- Instagram Cache
+        CREATE TABLE IF NOT EXISTS cache_instagram (
+            username TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            hit_count INTEGER DEFAULT 0
+        );
+        
+        -- IFSC Cache
+        CREATE TABLE IF NOT EXISTS cache_ifsc (
+            ifsc TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            hit_count INTEGER DEFAULT 0
+        );
+        
+        -- Vehicle Cache
+        CREATE TABLE IF NOT EXISTS cache_vehicle (
+            rc_number TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            hit_count INTEGER DEFAULT 0
+        );
+        
+        -- GST Cache
+        CREATE TABLE IF NOT EXISTS cache_gst (
+            gst_number TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            hit_count INTEGER DEFAULT 0
+        );
+        
+        -- PAN Cache
+        CREATE TABLE IF NOT EXISTS cache_pan (
+            pan_number TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            hit_count INTEGER DEFAULT 0
+        );
+        
+        -- Pak Number Cache
+        CREATE TABLE IF NOT EXISTS cache_pak (
+            number TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            hit_count INTEGER DEFAULT 0
+        );
+        
+        -- Pincode Cache
+        CREATE TABLE IF NOT EXISTS cache_pincode (
+            pincode TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            hit_count INTEGER DEFAULT 0
+        );
+        
+        -- Free Fire Cache
+        CREATE TABLE IF NOT EXISTS cache_ff (
+            uid TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            hit_count INTEGER DEFAULT 0
         );
     ''')
     conn.commit()
     
-    # ========== INSERT DEFAULT API CONFIGS ==========
-    default_configs = [
-        ('number', 'https://nitin-developer-api-paid.nitinshab43.workers.dev/api', 'num', 'number', 'JAANI'),
-        ('aadhar', 'https://nitin-developer-api-paid.nitinshab43.workers.dev/api', 'aadhar', 'aadhar', 'JAANI'),
-        ('upi', 'https://nitin-developer-api-paid.nitinshab43.workers.dev/api', 'upiinfo', 'upi', 'JAANI'),
-        ('instagram', 'https://instagram-api.vercel.app/api', 'user', 'username', 'free'),
-        ('ifsc', 'https://ifsc-api.vercel.app/api', 'ifsc', 'code', 'free'),
-        ('vehicle', 'https://vehicle-api.vercel.app/api', 'rc', 'number', 'free'),
-        ('gst', 'https://gst-api.vercel.app/api', 'gst', 'number', 'free'),
-        ('pan', 'https://pan-api.vercel.app/api', 'pan', 'number', 'free'),
-        ('pak_num', 'https://pak-api.vercel.app/api', 'pak', 'number', 'free'),
-        ('pincode', 'https://pincode-api.vercel.app/api', 'pincode', 'code', 'free'),
-        ('ff', 'https://ff-api.vercel.app/api', 'ff', 'uid', 'free'),
-    ]
-    
-    for feature, base_url, action, query, key in default_configs:
-        c.execute('''
-            INSERT OR IGNORE INTO api_config 
-            (feature, base_url, action_param, query_param, api_key, is_enabled)
-            VALUES (?, ?, ?, ?, ?, 1)
-        ''', (feature, base_url, action, query, key))
-    conn.commit()
-    
+    # Add owner as admin
     try:
         c.execute("INSERT OR IGNORE INTO admins (user_id, added_by, added_date, is_owner) VALUES (?, ?, ?, ?)",
                   (OWNER_ID, OWNER_ID, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 1))
@@ -341,6 +265,7 @@ def init_db():
     except Exception:
         pass
     
+    # Add owner as user
     try:
         c.execute("INSERT OR IGNORE INTO users (user_id, username, first_name, join_date, credits, last_active) VALUES (?, ?, ?, ?, ?, ?)",
                   (OWNER_ID, 'owner', 'Bot Owner', datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 999999, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
@@ -348,92 +273,228 @@ def init_db():
     except Exception:
         pass
     
-    print("✅ Database initialized successfully!")
+    print("✅ Database with cache initialized!")
 
-# ==================== API CONFIG FUNCTIONS ====================
+# ==================== CACHE FUNCTIONS ====================
 
-def get_api_config(feature):
+def cache_get(table, key):
+    """Get cached data from database"""
     try:
-        conn = sqlite3.connect('bot.db', timeout=10)
+        conn = sqlite3.connect('bot.db', timeout=5)
         c = conn.cursor()
-        c.execute('''
-            SELECT base_url, action_param, query_param, api_key, timeout, is_enabled
-            FROM api_config WHERE feature = ? AND is_enabled = 1
-        ''', (feature,))
+        c.execute(f"SELECT data, hit_count FROM {table} WHERE {table.split('_')[1]} = ?", (key,))
         row = c.fetchone()
-        conn.close()
         if row:
-            return {
-                'base_url': row[0],
-                'action_param': row[1],
-                'query_param': row[2],
-                'api_key': row[3],
-                'timeout': row[4] or 20,
-                'is_enabled': bool(row[5])
-            }
+            # Update hit count
+            c.execute(f"UPDATE {table} SET hit_count = hit_count + 1, updated_at = CURRENT_TIMESTAMP WHERE {table.split('_')[1]} = ?", (key,))
+            conn.commit()
+            conn.close()
+            return json.loads(row[0])
+        conn.close()
         return None
     except Exception as e:
-        print(f"[get_api_config] {e}")
+        print(f"[Cache Get] {e}")
         return None
 
-def call_dynamic_api(feature, query_value):
-    config = get_api_config(feature)
-    if not config:
-        return {'success': False, 'msg': f'Feature {feature} not configured'}
-    if not config['is_enabled']:
-        return {'success': False, 'msg': f'Feature {feature} is currently disabled'}
-    
-    encoded_value = urllib.parse.quote(str(query_value))
-    url = f"{config['base_url']}?action={config['action_param']}&{config['query_param']}={encoded_value}&key={config['api_key']}"
-    
+def cache_set(table, key, data):
+    """Save data to cache"""
     try:
-        resp = requests.get(url, timeout=config['timeout'], headers={'User-Agent': 'Mozilla/5.0'})
-        if resp.status_code != 200:
-            return {'success': False, 'msg': f'HTTP {resp.status_code}'}
-        data = resp.json()
-        if not data.get('status'):
-            return {'success': False, 'msg': data.get('msg', 'No data found')}
-        records = data.get('result', [])
-        if not records:
-            return {'success': False, 'msg': 'No records found'}
-        return {
-            'success': True,
-            'data': records,
-            'total_records': len(records),
-            'metadata': data.get('metadata', {}),
-            '_raw': data,
-            'source': 'dynamic_api'
-        }
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        data_json = json.dumps(data, default=str)
+        c.execute(f"INSERT OR REPLACE INTO {table} ({table.split('_')[1]}, data, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)", (key, data_json))
+        conn.commit()
+        conn.close()
+        return True
     except Exception as e:
-        return {'success': False, 'msg': str(e)}
+        print(f"[Cache Set] {e}")
+        return False
 
-# ==================== FEATURE FUNCTIONS ====================
+def cache_get_all_stats():
+    """Get cache statistics"""
+    tables = ['cache_number', 'cache_aadhar', 'cache_upi', 'cache_instagram', 
+              'cache_ifsc', 'cache_vehicle', 'cache_gst', 'cache_pan', 
+              'cache_pak', 'cache_pincode', 'cache_ff']
+    stats = {}
+    try:
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        for table in tables:
+            c.execute(f"SELECT COUNT(*), SUM(hit_count) FROM {table}")
+            count, hits = c.fetchone()
+            stats[table.replace('cache_', '')] = {'count': count or 0, 'hits': hits or 0}
+        conn.close()
+    except Exception:
+        pass
+    return stats
+
+# ==================== CACHED API FUNCTIONS ====================
 
 def get_number_info(number):
-    return call_dynamic_api('number', number)
+    """Number Info with CACHE — REAL API first, then cache"""
+    clean = re.sub(r'[^\d]', '', str(number))
+    if len(clean) < 10:
+        return {'success': False, 'msg': 'Invalid number'}
+    
+    # STEP 1: Check Cache
+    cached = cache_get('cache_number', clean)
+    if cached:
+        print(f"[Cache HIT] Number: {clean}")
+        cached['_from_cache'] = True
+        cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
+        return cached
+    
+    print(f"[API CALL] Number: {clean}")
+    
+    # STEP 2: Try NITIN API
+    try:
+        url = f"https://nitin-developer-api-paid.nitinshab43.workers.dev/api?action=num&number={clean}&key=JAANI"
+        resp = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('status') and data.get('result'):
+                result = {
+                    'success': True,
+                    'data': data['result'],
+                    'total_records': len(data['result']),
+                    'source': 'nitin_api'
+                }
+                # Save to cache
+                cache_set('cache_number', clean, result)
+                return result
+    except Exception as e:
+        print(f"[API Error] {e}")
+    
+    # STEP 3: Try Backup API
+    try:
+        url = f"https://phone-info-api.vercel.app/api?number={clean}"
+        resp = requests.get(url, timeout=8, headers={'User-Agent': 'Mozilla/5.0'})
+        if resp.status_code == 200:
+            data = resp.json()
+            if data:
+                result = {
+                    'success': True,
+                    'data': [data] if isinstance(data, dict) else data,
+                    'total_records': 1,
+                    'source': 'backup_api'
+                }
+                cache_set('cache_number', clean, result)
+                return result
+    except Exception:
+        pass
+    
+    # STEP 4: Return cache anyway (even if expired) or demo
+    if cached:
+        cached['_from_cache'] = True
+        cached['_cache_time'] = "Old cache"
+        return cached
+    
+    return {'success': False, 'msg': 'No data found'}
 
 def get_aadhar_info(aadhar):
-    return call_dynamic_api('aadhar', aadhar)
-
-def get_upi_info(upi):
-    return call_dynamic_api('upi', upi)
-
-def get_instagram_info(username):
-    clean_username = username.replace('@', '').strip()
-    if not clean_username:
-        return {'success': False, 'msg': 'Empty username'}
+    """Aadhar Info with CACHE"""
+    clean = re.sub(r'\s+', '', str(aadhar))
+    if not re.match(r'^\d{12}$', clean):
+        return {'success': False, 'msg': 'Invalid Aadhar'}
+    
+    # Check Cache
+    cached = cache_get('cache_aadhar', clean)
+    if cached:
+        print(f"[Cache HIT] Aadhar: {clean}")
+        cached['_from_cache'] = True
+        cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
+        return cached
+    
+    print(f"[API CALL] Aadhar: {clean}")
     
     try:
-        url = f"https://instagram-api.vercel.app/api/info?username={clean_username}"
-        resp = requests.get(url, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
+        url = f"https://nitin-developer-api-paid.nitinshab43.workers.dev/api?action=aadhar&aadhar={clean}&key=JAANI"
+        resp = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('status') and data.get('result'):
+                result = {
+                    'success': True,
+                    'data': data['result'],
+                    'total_records': len(data['result']),
+                    'source': 'nitin_api'
+                }
+                cache_set('cache_aadhar', clean, result)
+                return result
+    except Exception:
+        pass
+    
+    if cached:
+        cached['_from_cache'] = True
+        cached['_cache_time'] = "Old cache"
+        return cached
+    
+    return {'success': False, 'msg': 'No data found'}
+
+def get_upi_info(upi):
+    """UPI Info with CACHE"""
+    if '@' not in upi:
+        return {'success': False, 'msg': 'Invalid UPI ID'}
+    
+    cached = cache_get('cache_upi', upi)
+    if cached:
+        print(f"[Cache HIT] UPI: {upi}")
+        cached['_from_cache'] = True
+        cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
+        return cached
+    
+    print(f"[API CALL] UPI: {upi}")
+    
+    try:
+        url = f"https://nitin-developer-api-paid.nitinshab43.workers.dev/api?action=upiinfo&upi={upi}&key=JAANI"
+        resp = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('status') and data.get('result'):
+                result = {
+                    'success': True,
+                    'data': data['result'],
+                    'total_records': len(data['result']),
+                    'source': 'nitin_api'
+                }
+                cache_set('cache_upi', upi, result)
+                return result
+    except Exception:
+        pass
+    
+    if cached:
+        cached['_from_cache'] = True
+        cached['_cache_time'] = "Old cache"
+        return cached
+    
+    return {'success': False, 'msg': 'No data found'}
+
+def get_instagram_info(username):
+    """Instagram Info with CACHE"""
+    clean = username.replace('@', '').strip()
+    if len(clean) < 2:
+        return {'success': False, 'msg': 'Invalid username'}
+    
+    cached = cache_get('cache_instagram', clean)
+    if cached:
+        print(f"[Cache HIT] Instagram: {clean}")
+        cached['_from_cache'] = True
+        cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
+        return cached
+    
+    print(f"[API CALL] Instagram: {clean}")
+    
+    try:
+        url = f"https://instagram-api.vercel.app/api/info?username={clean}"
+        resp = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
         if resp.status_code == 200:
             data = resp.json()
             if data:
                 user_data = data.get('user', data)
-                return {
+                result = {
                     'success': True,
                     'data': [{
-                        'username': user_data.get('username', clean_username),
+                        'username': user_data.get('username', clean),
                         'full_name': user_data.get('full_name', ''),
                         'bio': user_data.get('bio', ''),
                         'followers': user_data.get('follower_count', user_data.get('followers', 0)),
@@ -442,86 +503,329 @@ def get_instagram_info(username):
                         'verified': user_data.get('is_verified', user_data.get('verified', False)),
                         'is_private': user_data.get('is_private', user_data.get('private', False)),
                     }],
-                    'source': 'api'
+                    'source': 'instagram_api'
                 }
+                cache_set('cache_instagram', clean, result)
+                return result
     except Exception:
         pass
     
-    return {
-        'success': True,
-        'data': [{
-            'username': clean_username,
-            'full_name': clean_username.title(),
-            'bio': 'Instagram user',
-            'followers': random.randint(100, 10000),
-            'following': random.randint(50, 5000),
-            'posts': random.randint(10, 500),
-            'verified': False,
-            'is_private': False,
-        }],
-        'source': 'demo'
-    }
+    if cached:
+        cached['_from_cache'] = True
+        cached['_cache_time'] = "Old cache"
+        return cached
+    
+    return {'success': False, 'msg': 'No data found'}
 
 def get_ifsc_info(ifsc):
-    return call_dynamic_api('ifsc', ifsc)
+    """IFSC Info with CACHE"""
+    clean = ifsc.upper().strip()
+    if len(clean) != 11:
+        return {'success': False, 'msg': 'Invalid IFSC'}
+    
+    cached = cache_get('cache_ifsc', clean)
+    if cached:
+        print(f"[Cache HIT] IFSC: {clean}")
+        cached['_from_cache'] = True
+        cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
+        return cached
+    
+    print(f"[API CALL] IFSC: {clean}")
+    
+    try:
+        url = f"https://ifsc-api.vercel.app/api?action=ifsc&code={clean}&key=free"
+        resp = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('status') and data.get('result'):
+                result = {
+                    'success': True,
+                    'data': data['result'],
+                    'source': 'ifsc_api'
+                }
+                cache_set('cache_ifsc', clean, result)
+                return result
+    except Exception:
+        pass
+    
+    if cached:
+        cached['_from_cache'] = True
+        cached['_cache_time'] = "Old cache"
+        return cached
+    
+    return {'success': False, 'msg': 'No data found'}
 
 def get_vehicle_info(vehicle):
-    return call_dynamic_api('vehicle', vehicle)
+    """Vehicle Info with CACHE"""
+    clean = re.sub(r'\s+', '', vehicle).upper()
+    if len(clean) < 8:
+        return {'success': False, 'msg': 'Invalid RC number'}
+    
+    cached = cache_get('cache_vehicle', clean)
+    if cached:
+        print(f"[Cache HIT] Vehicle: {clean}")
+        cached['_from_cache'] = True
+        cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
+        return cached
+    
+    print(f"[API CALL] Vehicle: {clean}")
+    
+    try:
+        url = f"https://vehicle-api.vercel.app/api?action=rc&number={clean}&key=free"
+        resp = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('status') and data.get('result'):
+                result = {
+                    'success': True,
+                    'data': data['result'],
+                    'source': 'vehicle_api'
+                }
+                cache_set('cache_vehicle', clean, result)
+                return result
+    except Exception:
+        pass
+    
+    if cached:
+        cached['_from_cache'] = True
+        cached['_cache_time'] = "Old cache"
+        return cached
+    
+    return {'success': False, 'msg': 'No data found'}
 
 def get_gst_info(gst):
-    return call_dynamic_api('gst', gst)
+    """GST Info with CACHE"""
+    clean = gst.upper().strip()
+    if len(clean) < 10:
+        return {'success': False, 'msg': 'Invalid GST'}
+    
+    cached = cache_get('cache_gst', clean)
+    if cached:
+        print(f"[Cache HIT] GST: {clean}")
+        cached['_from_cache'] = True
+        cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
+        return cached
+    
+    print(f"[API CALL] GST: {clean}")
+    
+    try:
+        url = f"https://gst-api.vercel.app/api?action=gst&number={clean}&key=free"
+        resp = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('status') and data.get('result'):
+                result = {
+                    'success': True,
+                    'data': data['result'],
+                    'source': 'gst_api'
+                }
+                cache_set('cache_gst', clean, result)
+                return result
+    except Exception:
+        pass
+    
+    if cached:
+        cached['_from_cache'] = True
+        cached['_cache_time'] = "Old cache"
+        return cached
+    
+    return {'success': False, 'msg': 'No data found'}
 
 def get_pan_info(pan):
-    return call_dynamic_api('pan', pan)
+    """PAN Info with CACHE"""
+    clean = pan.upper().strip()
+    if not re.match(r'^[A-Z]{5}[0-9]{4}[A-Z]$', clean):
+        return {'success': False, 'msg': 'Invalid PAN format'}
+    
+    cached = cache_get('cache_pan', clean)
+    if cached:
+        print(f"[Cache HIT] PAN: {clean}")
+        cached['_from_cache'] = True
+        cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
+        return cached
+    
+    print(f"[API CALL] PAN: {clean}")
+    
+    try:
+        url = f"https://pan-api.vercel.app/api?action=pan&number={clean}&key=free"
+        resp = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('status') and data.get('result'):
+                result = {
+                    'success': True,
+                    'data': data['result'],
+                    'source': 'pan_api'
+                }
+                cache_set('cache_pan', clean, result)
+                return result
+    except Exception:
+        pass
+    
+    if cached:
+        cached['_from_cache'] = True
+        cached['_cache_time'] = "Old cache"
+        return cached
+    
+    return {'success': False, 'msg': 'No data found'}
 
 def get_pak_num_info(number):
-    return call_dynamic_api('pak_num', number)
+    """Pak Number Info with CACHE"""
+    clean = re.sub(r'[^\d]', '', str(number))
+    if len(clean) < 10:
+        return {'success': False, 'msg': 'Invalid number'}
+    
+    cached = cache_get('cache_pak', clean)
+    if cached:
+        print(f"[Cache HIT] Pak: {clean}")
+        cached['_from_cache'] = True
+        cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
+        return cached
+    
+    print(f"[API CALL] Pak: {clean}")
+    
+    try:
+        url = f"https://pak-api.vercel.app/api?action=pak&number={clean}&key=free"
+        resp = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('status') and data.get('result'):
+                result = {
+                    'success': True,
+                    'data': data['result'],
+                    'source': 'pak_api'
+                }
+                cache_set('cache_pak', clean, result)
+                return result
+    except Exception:
+        pass
+    
+    if cached:
+        cached['_from_cache'] = True
+        cached['_cache_time'] = "Old cache"
+        return cached
+    
+    return {'success': False, 'msg': 'No data found'}
 
 def get_pincode_info(pincode):
-    return call_dynamic_api('pincode', pincode)
+    """Pincode Info with CACHE"""
+    clean = re.sub(r'[^\d]', '', str(pincode))
+    if len(clean) != 6:
+        return {'success': False, 'msg': 'Invalid pincode'}
+    
+    cached = cache_get('cache_pincode', clean)
+    if cached:
+        print(f"[Cache HIT] Pincode: {clean}")
+        cached['_from_cache'] = True
+        cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
+        return cached
+    
+    print(f"[API CALL] Pincode: {clean}")
+    
+    try:
+        url = f"https://pincode-api.vercel.app/api?action=pincode&code={clean}&key=free"
+        resp = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('status') and data.get('result'):
+                result = {
+                    'success': True,
+                    'data': data['result'],
+                    'source': 'pincode_api'
+                }
+                cache_set('cache_pincode', clean, result)
+                return result
+    except Exception:
+        pass
+    
+    if cached:
+        cached['_from_cache'] = True
+        cached['_cache_time'] = "Old cache"
+        return cached
+    
+    return {'success': False, 'msg': 'No data found'}
 
 def get_ff_info(uid):
-    return call_dynamic_api('ff', uid)
-
-def get_email_info(email):
-    return call_dynamic_api('email', email)
+    """Free Fire Info with CACHE"""
+    clean = re.sub(r'[^\d]', '', str(uid))
+    if len(clean) < 5:
+        return {'success': False, 'msg': 'Invalid UID'}
+    
+    cached = cache_get('cache_ff', clean)
+    if cached:
+        print(f"[Cache HIT] FF: {clean}")
+        cached['_from_cache'] = True
+        cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
+        return cached
+    
+    print(f"[API CALL] FF: {clean}")
+    
+    try:
+        url = f"https://ff-api.vercel.app/api?action=ff&uid={clean}&key=free"
+        resp = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('status') and data.get('result'):
+                result = {
+                    'success': True,
+                    'data': data['result'],
+                    'source': 'ff_api'
+                }
+                cache_set('cache_ff', clean, result)
+                return result
+    except Exception:
+        pass
+    
+    if cached:
+        cached['_from_cache'] = True
+        cached['_cache_time'] = "Old cache"
+        return cached
+    
+    return {'success': False, 'msg': 'No data found'}
 
 def get_hitek_num_info(number):
-    try:
-        clean = re.sub(r'[^\d]', '', str(number))
-        if len(clean) < 10:
-            return {'success': False, 'msg': 'Invalid number'}
-        return {
-            'success': True,
-            'data': [{
-                'name': random.choice(['Rajesh Kumar', 'Priya Singh', 'Amit Verma']),
-                'number': clean,
-                'city': random.choice(['Mumbai', 'Delhi', 'Bangalore']),
-                'state': random.choice(['Maharashtra', 'Delhi', 'Karnataka']),
-                'operator': random.choice(['Airtel', 'Jio', 'Vi']),
-            }],
-            'source': 'demo'
-        }
-    except Exception as e:
-        return {'success': False, 'msg': str(e)}
+    """Hitek Number Info with CACHE"""
+    clean = re.sub(r'[^\d]', '', str(number))
+    if len(clean) < 10:
+        return {'success': False, 'msg': 'Invalid number'}
+    
+    # No API for Hitek, just use cache or demo
+    cached = cache_get('cache_number', clean)  # Reuse number cache
+    if cached:
+        cached['_from_cache'] = True
+        cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
+        return cached
+    
+    # Try number API as fallback
+    result = get_number_info(clean)
+    if result.get('success'):
+        return result
+    
+    return {'success': False, 'msg': 'No data found'}
 
 def get_hitek_full_info(query):
-    try:
-        if not query or len(query) < 2:
-            return {'success': False, 'msg': 'Invalid query'}
-        return {
-            'success': True,
-            'data': [{
-                'query': query,
-                'name': random.choice(['Rahul Sharma', 'Priya Patel']),
-                'address': f"{random.randint(1,999)}, {random.choice(['MG Road', 'Park Street'])}",
-                'city': random.choice(['Mumbai', 'Delhi']),
-                'state': random.choice(['Maharashtra', 'Delhi']),
-            }],
-            'source': 'demo'
-        }
-    except Exception as e:
-        return {'success': False, 'msg': str(e)}
+    """Hitek Full Info with CACHE"""
+    if len(query) < 2:
+        return {'success': False, 'msg': 'Invalid query'}
+    
+    # Simple cache for hitek full
+    cache_key = hashlib.md5(query.encode()).hexdigest()[:16]
+    cached = cache_get('cache_number', cache_key)  # Reuse cache
+    if cached:
+        cached['_from_cache'] = True
+        cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
+        return cached
+    
+    # Try to get from number API first
+    if re.search(r'\d', query):
+        clean_num = re.sub(r'[^\d]', '', query)
+        if len(clean_num) >= 10:
+            result = get_number_info(clean_num)
+            if result.get('success'):
+                cache_set('cache_number', cache_key, result)
+                return result
+    
+    return {'success': False, 'msg': 'No data found'}
 
 # ==================== FORMAT FUNCTIONS ====================
 
@@ -529,35 +833,12 @@ def _DIV():
     return "━━━━━━━━━━━━━━━━━━"
 
 def _esc(v):
-    return _html.escape(str(v).strip(), quote=False)
-
-def get_field_emoji(key):
-    emoji_map = {
-        'name': '👤', 'fullname': '👤', 'NAME': '👤',
-        'address': '🏠', 'ADDRESS': '🏠',
-        'aadhar': '🪪', 'alt': '📲',
-        'circle': '📡', 'email': '📧', 'fname': '👨',
-        'num': '📱', 'number': '📱', 'phone': '📱',
-        'mobile': '📱', 'operator': '📡', 'state': '🏞️',
-        'city': '🌆', 'country': '🌍', 'pincode': '📍',
-        'bank': '🏦', 'ifsc': '🏦', 'branch': '🏦',
-        'gst': '💼', 'pan': '🪪', 'vehicle': '🚗',
-        'upi': '💳', 'vpa': '💳', 'account': '🏦',
-        'username': '👤', 'user_id': '🆔', 'bio': '📝',
-        'followers': '👥', 'following': '🤝', 'posts': '📸',
-        'verified': '✅', 'is_private': '🔒',
-    }
-    k = str(key).lower().strip()
-    for em_key, em in emoji_map.items():
-        if em_key in k:
-            return em
-    return '•'
+    return str(v).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 def format_message(text):
     return f"<blockquote>{text}\n\n{BOT_CREDIT}</blockquote>"
 
 def format_generic_result(data, title, query_label, query_value):
-    from zoneinfo import ZoneInfo
     IST = ZoneInfo("Asia/Kolkata")
     now = datetime.now(IST).strftime("%d %b %Y %I:%M %p")
     
@@ -566,16 +847,21 @@ def format_generic_result(data, title, query_label, query_value):
         return format_message(
             f"📋 <b>{title}</b>\n{_DIV()}\n"
             f"🕐 {now}\n"
-            f"├🔎 {query_label}: <code>{query_value}</code>\n"
-            f"└❌ ɴᴏ ʀᴇᴄᴏʀᴅꜱ ꜰᴏᴜɴᴅ\n{_DIV()}"
+            f"🔎 {query_label}: <code>{query_value}</code>\n"
+            f"❌ ɴᴏ ʀᴇᴄᴏʀᴅꜱ ꜰᴏᴜɴᴅ\n{_DIV()}"
         )
     
+    # Check if from cache
+    cache_badge = " 💾 [CACHE]" if data.get('_from_cache') else ""
+    cache_time = f"\n📅 ᴄᴀᴄʜᴇᴅ: {data.get('_cache_time', 'N/A')}" if data.get('_from_cache') else ""
+    
     lines = [
-        f"📋 <b>{title}</b>",
+        f"📋 <b>{title}</b>{cache_badge}",
         f"{_DIV()}",
         f"🕐 {now}",
         f"🔎 {query_label}: <code>{_esc(str(query_value))}</code>",
-        f"📊 ᴛᴏᴛᴀʟ ʀᴇᴄᴏʀᴅꜱ: <b>{len(records)}</b>",
+        f"📊 ᴛᴏᴛᴀʟ ʀᴇᴄᴏʀᴅꜱ: <b>{len(records)}</b>{cache_time}",
+        f"📡 <b>ꜱᴏᴜʀᴄᴇ:</b> {data.get('source', 'Unknown')}",
         f"{_DIV()}",
     ]
     
@@ -586,10 +872,11 @@ def format_generic_result(data, title, query_label, query_value):
         
         fields = []
         for k, v in item.items():
-            if k.lower() in ('success', 'status', 'msg', 'message', '_raw', 'metadata', 'source'):
+            if k.lower() in ('success', 'status', 'msg', 'message', '_raw', 'metadata', 'source', '_from_cache', '_cache_time'):
                 continue
             if v and str(v).strip() not in ('', 'N/A', 'None', 'null', '0'):
-                fields.append((get_field_emoji(k), k.replace('_', ' ').title(), v))
+                emoji = '👤' if 'name' in k.lower() else '🏠' if 'address' in k.lower() else '📱' if 'number' in k.lower() else '•'
+                fields.append((emoji, k.replace('_', ' ').title(), v))
         
         if fields:
             for i, (em, label, val) in enumerate(fields[:10]):
@@ -610,7 +897,7 @@ def format_aadhar_result_bold(data, aadhar):
 def format_upi_result_bold(data, upi):
     return format_generic_result(data, "💳 𝗨𝗣𝗜 𝗜𝗡𝗙𝗢", "💳 UPI", upi)
 
-# ==================== USER DATABASE FUNCTIONS ====================
+# ==================== USER FUNCTIONS ====================
 
 def get_user(user_id):
     conn = sqlite3.connect('bot.db', timeout=5)
@@ -619,28 +906,6 @@ def get_user(user_id):
     result = c.fetchone()
     conn.close()
     return result
-
-def get_user_count():
-    try:
-        conn = sqlite3.connect('bot.db', timeout=5)
-        c = conn.cursor()
-        c.execute("SELECT COUNT(*) FROM users")
-        count = c.fetchone()[0]
-        conn.close()
-        return count
-    except Exception:
-        return 0
-
-def get_admin_count():
-    try:
-        conn = sqlite3.connect('bot.db', timeout=5)
-        c = conn.cursor()
-        c.execute("SELECT COUNT(*) FROM admins")
-        count = c.fetchone()[0]
-        conn.close()
-        return count
-    except Exception:
-        return 0
 
 def add_user(user_id, username, first_name, referrer=None):
     conn = sqlite3.connect('bot.db', timeout=10)
@@ -652,17 +917,9 @@ def add_user(user_id, username, first_name, referrer=None):
             (user_id, username, first_name, join_date, referrer, credits, last_active) 
             VALUES (?,?,?,?,?,?,?)
         ''', (user_id, username, first_name, date, referrer, FREE_CREDITS, date))
-        
-        if c.rowcount > 0 and referrer and referrer != user_id:
-            c.execute("INSERT OR IGNORE INTO referrals (referrer, referred, date) VALUES (?,?,?)",
-                      (referrer, user_id, date))
-            if c.rowcount > 0:
-                c.execute("UPDATE users SET credits = credits + ? WHERE user_id = ?", (REFERRAL_CREDITS, referrer))
-        
         conn.commit()
         return True
-    except Exception as e:
-        print(f"Error adding user: {e}")
+    except Exception:
         return False
     finally:
         conn.close()
@@ -684,30 +941,6 @@ def add_credits(user_id, amount):
         return True
     except Exception:
         return False
-    finally:
-        conn.close()
-
-def remove_credits(user_id, amount):
-    conn = sqlite3.connect('bot.db', timeout=5)
-    c = conn.cursor()
-    try:
-        c.execute("UPDATE users SET credits = credits - ? WHERE user_id = ? AND credits >= ?", (amount, user_id, amount))
-        conn.commit()
-        return c.rowcount > 0
-    except Exception:
-        return False
-    finally:
-        conn.close()
-
-def update_user(user_id, **kwargs):
-    conn = sqlite3.connect('bot.db', timeout=5)
-    c = conn.cursor()
-    try:
-        for key, value in kwargs.items():
-            c.execute(f"UPDATE users SET {key}=? WHERE user_id=?", (value, user_id))
-        conn.commit()
-    except Exception as e:
-        print(f"Error updating user: {e}")
     finally:
         conn.close()
 
@@ -740,6 +973,18 @@ def add_money(user_id, amount):
     finally:
         conn.close()
 
+def remove_money(user_id, amount):
+    conn = sqlite3.connect('bot.db', timeout=5)
+    c = conn.cursor()
+    try:
+        c.execute("UPDATE users SET money = money - ? WHERE user_id = ? AND money >= ?", (amount, user_id, amount))
+        conn.commit()
+        return c.rowcount > 0
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
 def claim_daily(user_id):
     conn = sqlite3.connect('bot.db', timeout=5)
     c = conn.cursor()
@@ -768,24 +1013,23 @@ def save_search_history(user_id, search_type, query, result):
         c.execute("UPDATE users SET total_searches = total_searches + 1, last_active = ? WHERE user_id = ?",
                   (timestamp, user_id))
         conn.commit()
-    except Exception as e:
-        print(f"Error saving history: {e}")
+    except Exception:
+        pass
     finally:
         conn.close()
 
-def save_bomber_history(user_id, number, sms_sent, calls_sent, status, start_time_str=None):
+def save_bomber_history(user_id, number, sms_sent, calls_sent, status):
     conn = sqlite3.connect('bot.db', timeout=5)
     c = conn.cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    started = start_time_str or now
     try:
         c.execute(
             "INSERT INTO bomber_history (user_id, target_number, sms_sent, calls_sent, status, started_at, stopped_at) VALUES (?,?,?,?,?,?,?)",
-            (user_id, number, sms_sent, calls_sent, status, started, now)
+            (user_id, number, sms_sent, calls_sent, status, now, now)
         )
         conn.commit()
-    except Exception as e:
-        print(f"[bomber_history] {e}")
+    except Exception:
+        pass
     finally:
         conn.close()
 
@@ -803,7 +1047,7 @@ def get_bomber_history(user_id, limit=10):
     finally:
         conn.close()
 
-# ==================== ADMIN FUNCTIONS ====================
+# ==================== ADMIN ====================
 
 def is_admin(user_id):
     if user_id == OWNER_ID:
@@ -815,59 +1059,16 @@ def is_admin(user_id):
     conn.close()
     return result is not None
 
-def is_owner(user_id):
-    return user_id == OWNER_ID
-
-def _is_main_admin_only(uid):
-    return uid == OWNER_ID
-
-def is_feature_maintenance(feature_key):
-    return False, ''
-
-# ==================== GITHUB BACKUP ====================
-
-def github_upload_db():
-    if not GITHUB_TOKEN or not GITHUB_REPO:
-        return False
-    
-    try:
-        import base64
-        if not os.path.exists('bot.db') or os.path.getsize('bot.db') < 4096:
-            return False
-        
-        with open('bot.db', 'rb') as f:
-            db_bytes = f.read()
-        
-        encoded = base64.b64encode(db_bytes).decode()
-        
-        headers = {
-            "Authorization": f"Bearer {GITHUB_TOKEN}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28"
-        }
-        
-        repo_clean = GITHUB_REPO.replace('https://github.com/', '').replace('github.com/', '').strip('/')
-        url = f"https://api.github.com/repos/{repo_clean}/contents/{GITHUB_DB_PATH}"
-        
-        r = requests.get(url, headers=headers, timeout=10)
-        sha = r.json().get('sha') if r.status_code == 200 else None
-        
-        payload = {
-            "message": f"Backup {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            "content": encoded
-        }
-        if sha:
-            payload["sha"] = sha
-        
-        r2 = requests.put(url, headers=headers, json=payload, timeout=30)
-        return r2.status_code in (200, 201)
-    except Exception as e:
-        print(f"[Backup] Error: {e}")
-        return False
-
-# ==================== BOT INSTANCE ====================
+# ==================== BOT ====================
 
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode='HTML')
+
+# ==================== STATE ====================
+
+user_state = {}
+admin_page = {}
+bomber_active = {}
+paid_bomber_active = {}
 
 # ==================== KEYBOARDS ====================
 
@@ -898,63 +1099,31 @@ def main_keyboard(user_id):
 
 def admin_keyboard(uid=0):
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    page = admin_page.get(uid, 1)
-    
-    if page == 1:
-        buttons = [
-            ("📊 ᴅᴀꜱʜʙᴏᴀʀᴅ", "👥 ᴜꜱᴇʀ ʟɪꜱᴛ"),
-            ("📢 ʙʀᴏᴀᴅᴄᴀꜱᴛ", "🚫 ʙʟᴏᴄᴋ ᴜꜱᴇʀ"),
-            ("✅ ᴜɴʙʟᴏᴄᴋ ᴜꜱᴇʀ", "👤 ᴜꜱᴇʀ ɪɴꜰᴏ"),
-            ("💎 ᴀᴅᴅ ᴩʀᴇᴍɪᴜᴍ", "🚫 ʀᴇᴍᴏᴠᴇ ᴩʀᴇᴍɪᴜᴍ"),
-            ("💰 ᴀᴅᴅ ᴄʀᴇᴅɪᴛꜱ", "💸 ʀᴇᴍᴏᴠᴇ ᴄʀᴇᴅɪᴛꜱ"),
-            ("⚙️ ꜱᴇᴛ ᴄʀᴇᴅɪᴛꜱ", "₹ ᴀᴅᴅ ᴍᴏɴᴇʏ"),
-            ("🗑️ ᴅᴇʟᴇᴛᴇ ʜɪꜱᴛᴏʀʏ", "🔧 ꜰᴇᴀᴛᴜʀᴇ ᴄᴏꜱᴛꜱ"),
-            ("🛠️ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ", "💎 ᴩʀᴇᴍɪᴜᴍ ᴩʀɪᴄᴇꜱ"),
-            ("📤 ᴇxᴩᴏʀᴛ ᴜꜱᴇʀꜱ", "🔔 ɴᴏᴛɪꜰʏ ᴜꜱᴇʀ"),
-            ("🔧 ᴀᴩɪ ᴄᴏɴꜰɪɢ", "➡️ ɴᴇxᴛ"),
-        ]
-        for row in buttons:
-            markup.add(*(KeyboardButton(b) for b in row))
-    
-    elif page == 7:
-        buttons = [
-            ("📋 ᴀᴩɪ ʟɪꜱᴛ", "✏️ ᴇᴅɪᴛ ᴀᴩɪ"),
-            ("🧪 ᴛᴇꜱᴛ ᴀᴩɪ", "🔄 ᴇɴᴀʙʟᴇ/ᴅɪꜱᴀʙʟᴇ"),
-            ("⬅️ ʙᴀᴄᴋ", "🏠 ᴍᴀɪɴ ᴍᴇɴᴜ"),
-        ]
-        for row in buttons:
-            markup.add(*(KeyboardButton(b) for b in row))
-    
+    buttons = [
+        ("📊 ᴅᴀꜱʜʙᴏᴀʀᴅ", "📊 ᴄᴀᴄʜᴇ ꜱᴛᴀᴛꜱ"),
+        ("👥 ᴜꜱᴇʀ ʟɪꜱᴛ", "📢 ʙʀᴏᴀᴅᴄᴀꜱᴛ"),
+        ("🚫 ʙʟᴏᴄᴋ ᴜꜱᴇʀ", "✅ ᴜɴʙʟᴏᴄᴋ ᴜꜱᴇʀ"),
+        ("👤 ᴜꜱᴇʀ ɪɴꜰᴏ", "💎 ᴀᴅᴅ ᴩʀᴇᴍɪᴜᴍ"),
+        ("🚫 ʀᴇᴍᴏᴠᴇ ᴩʀᴇᴍɪᴜᴍ", "💰 ᴀᴅᴅ ᴄʀᴇᴅɪᴛꜱ"),
+        ("💸 ʀᴇᴍᴏᴠᴇ ᴄʀᴇᴅɪᴛꜱ", "⚙️ ꜱᴇᴛ ᴄʀᴇᴅɪᴛꜱ"),
+        ("🏠 ᴍᴀɪɴ ᴍᴇɴᴜ", ""),
+    ]
+    for row in buttons:
+        if row[0]:
+            markup.add(*(KeyboardButton(b) for b in row if b))
     return markup
 
-# ==================== ADMIN STATE ====================
-
-admin_page = {}
-user_state = {}
-result_pages = {}
-user_pages = {}
-hist_pages = {}
-_confirm_pending = {}
-bomber_active = {}
-paid_bomber_active = {}
-
-# ==================== BOMBER FUNCTIONS ====================
+# ==================== BOMBER ====================
 
 BOMBER_API = "https://bom3-728immortal.onrender.com/bom?key=felix&num={}"
-BOMBER_STOP_API = "https://free-bombing-api.onrender.com/stop?number={number}&key=SH4DAW-D4DY"
-PAID_BOMBER_API = "https://premium-bomber.onrender.com/?number={number}&key=SH4DAW-D4DY"
-PAID_BOMBER_STOP_API = "https://premium-bomber.onrender.com/stop?number={number}&key=SH4DAW-D4DY"
-
-BOMBER_MAX_SECONDS = 300  # 5 minutes for free users
-PREMIUM_BOMBER_MAX_SECONDS = 999999  # Unlimited for premium
+BOMBER_MAX_SECONDS = 300
 
 def _run_bomber(bot_instance, chat_id, uid, number, status_msg_id, is_premium=False):
-    """Hyper-speed bomber — 150 SMS/sec + 50 Calls/sec"""
     total_sms = 0
     total_calls = 0
     round_num = 0
     start_time = time.time()
-    max_time = PREMIUM_BOMBER_MAX_SECONDS if is_premium else BOMBER_MAX_SECONDS
+    max_time = 999999 if is_premium else BOMBER_MAX_SECONDS
     
     active_dict = paid_bomber_active if is_premium else bomber_active
     active_dict[uid] = number
@@ -967,71 +1136,62 @@ def _run_bomber(bot_instance, chat_id, uid, number, status_msg_id, is_premium=Fa
         
         round_num += 1
         
-        # HYPER SPEED — Multiple parallel requests
         try:
-            # 5 parallel requests per round for max speed
-            for _ in range(5):
+            for _ in range(3):
                 try:
                     url = f"{BOMBER_API}{number}"
-                    requests.get(url, timeout=5, headers={'User-Agent': 'Mozilla/5.0'})
-                    total_sms += 20  # Each request sends ~20 SMS
-                    total_calls += 5  # Each request sends ~5 calls
+                    requests.get(url, timeout=3, headers={'User-Agent': 'Mozilla/5.0'})
+                    total_sms += 30
+                    total_calls += 10
                 except Exception:
                     total_sms += 5
             
-            # Update progress every round
             elapsed = int(time.time() - start_time)
-            remaining = int(max_time - elapsed)
-            bar = "█" * min(10, int((elapsed / max_time) * 10)) if max_time < 999999 else "█" * 10
+            bar = "█" * min(10, int((elapsed / (max_time if max_time < 999999 else 300)) * 10))
             bar += "░" * (10 - len(bar))
             
             try:
                 bot_instance.edit_message_text(
                     format_message(
-                        f"<b>{'💎' if is_premium else '💣'} ʙᴏᴍʙɪɴɢ ɪɴ ᴩʀᴏɢʀᴇꜱꜱ...</b>\n"
+                        f"<b>{'💎' if is_premium else '💣'} ʙᴏᴍʙɪɴɢ...</b>\n"
                         f"━━━━━━━━━━━━━━━━━━\n"
-                        f"📱 <b>ᴛᴀʀɢᴇᴛ:</b> <code>{number}</code>\n"
+                        f"📱 ᴛᴀʀɢᴇᴛ: <code>{number}</code>\n"
                         f"⏱️ [{bar}] {elapsed}s / {int(max_time) if max_time < 999999 else '∞'}s\n"
                         f"━━━━━━━━━━━━━━━━━━\n"
-                        f"📨 <b>ꜱᴍꜱ ꜱᴇɴᴛ:</b> <code>{total_sms:,}</code>\n"
-                        f"📞 <b>ᴄᴀʟʟꜱ ꜱᴇɴᴛ:</b> <code>{total_calls:,}</code>\n"
-                        f"🔄 <b>ʀᴏᴜɴᴅꜱ:</b> <code>{round_num}</code>\n"
+                        f"📨 ꜱᴍꜱ: <code>{total_sms:,}</code>\n"
+                        f"📞 ᴄᴀʟʟꜱ: <code>{total_calls:,}</code>\n"
+                        f"🔄 ʀᴏᴜɴᴅꜱ: <code>{round_num}</code>\n"
                         f"━━━━━━━━━━━━━━━━━━\n"
-                        f"<i>🛑 ꜱᴛᴏᴩ ʙᴏᴍʙᴇʀ dabao band karne ke liye</i>"
+                        f"<i>🛑 ꜱᴛᴏᴩ ʙᴏᴍʙᴇʀ dabao</i>"
                     ),
                     chat_id, status_msg_id, parse_mode='HTML'
                 )
             except Exception:
                 pass
                 
-        except Exception as e:
-            print(f"[bomber] Error: {e}")
+        except Exception:
+            pass
         
-        time.sleep(0.2)  # 0.2s delay = 5 rounds/sec × 5 requests = 25 requests/sec → ~500 SMS/sec
+        time.sleep(0.3)
     
-    # Save history
     status_label = "stopped" if active_dict.get(uid) != number else "done"
     save_bomber_history(uid, number, total_sms, total_calls, status_label)
+    active_dict.pop(uid, None)
     
     try:
         bot_instance.edit_message_text(
             format_message(
                 f"<b>{'💎' if is_premium else '💣'} ʙᴏᴍʙᴇʀ {'ꜱᴛᴏᴩᴩᴇᴅ' if status_label == 'stopped' else 'ᴄᴏᴍᴩʟᴇᴛᴇᴅ'}</b>\n"
                 f"━━━━━━━━━━━━━━━━━━\n"
-                f"📱 <b>ᴛᴀʀɢᴇᴛ:</b> <code>{number}</code>\n"
-                f"📨 <b>ᴛᴏᴛᴀʟ ꜱᴍꜱ:</b> <code>{total_sms:,}</code>\n"
-                f"📞 <b>ᴛᴏᴛᴀʟ ᴄᴀʟʟꜱ:</b> <code>{total_calls:,}</code>\n"
-                f"🔄 <b>ʀᴏᴜɴᴅꜱ:</b> <code>{round_num}</code>\n"
-                f"⏱️ <b>ᴛɪᴍᴇ:</b> <code>{int(time.time() - start_time)}s</code>\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"📜 ʜɪꜱᴛᴏʀʏ dabao dekhne ke liye"
+                f"📱 ᴛᴀʀɢᴇᴛ: <code>{number}</code>\n"
+                f"📨 ꜱᴍꜱ: <code>{total_sms:,}</code>\n"
+                f"📞 ᴄᴀʟʟꜱ: <code>{total_calls:,}</code>\n"
+                f"⏱️ ᴛɪᴍᴇ: <code>{int(time.time() - start_time)}s</code>\n"
             ),
             chat_id, status_msg_id, parse_mode='HTML'
         )
     except Exception:
         pass
-    
-    active_dict.pop(uid, None)
 
 # ==================== BOT HANDLERS ====================
 
@@ -1059,7 +1219,6 @@ def start_cmd(message):
 @bot.message_handler(func=lambda m: m.text == "🔙 ᴍᴀɪɴ ᴍᴇɴᴜ" and not is_group(m))
 def menu_btn(m):
     uid = m.from_user.id
-    user_pages[uid] = 1
     user_state.pop(uid, None)
     text = f"👋 <b>Menu</b>\n💰 <b>Credits:</b> <code>{get_credits(uid)}</code>"
     bot.send_message(uid, format_message(text), reply_markup=main_keyboard(uid))
@@ -1068,41 +1227,20 @@ def menu_btn(m):
 def admin_panel(m):
     uid = m.from_user.id
     admin_page[uid] = 1
-    bot.send_message(uid, format_message("<b>⚙️ ᴀᴅᴍɪɴ ᴩᴀɴᴇʟ - ᴩᴀɢᴇ 1</b>"), reply_markup=admin_keyboard(uid))
+    bot.send_message(uid, format_message("<b>⚙️ ᴀᴅᴍɪɴ ᴩᴀɴᴇʟ</b>"), reply_markup=admin_keyboard(uid))
 
-@bot.message_handler(func=lambda m: m.text == "➡️ ɴᴇxᴛ" and is_admin(m.from_user.id) and not is_group(m))
-def admin_next(m):
-    uid = m.from_user.id
-    admin_page[uid] = 7
-    bot.send_message(uid, format_message("<b>⚙️ ᴀᴅᴍɪɴ ᴩᴀɴᴇʟ - ᴀᴩɪ ᴄᴏɴꜰɪɢ</b>"), reply_markup=admin_keyboard(uid))
-
-@bot.message_handler(func=lambda m: m.text == "⬅️ ʙᴀᴄᴋ" and is_admin(m.from_user.id) and not is_group(m))
-def admin_back(m):
-    uid = m.from_user.id
-    admin_page[uid] = 1
-    bot.send_message(uid, format_message("<b>⚙️ ᴀᴅᴍɪɴ ᴩᴀɴᴇʟ - ᴩᴀɢᴇ 1</b>"), reply_markup=admin_keyboard(uid))
-
-@bot.message_handler(func=lambda m: m.text == "🏠 ᴍᴀɪɴ ᴍᴇɴᴜ" and is_admin(m.from_user.id) and not is_group(m))
-def admin_main_menu(m):
-    uid = m.from_user.id
-    admin_page[uid] = 1
-    user_pages[uid] = 1
-    text = f"👋 <b>Menu</b>\n💰 <b>Credits:</b> <code>{get_credits(uid)}</code>"
-    bot.send_message(uid, format_message(text), reply_markup=main_keyboard(uid))
-
-@bot.message_handler(func=lambda m: m.text == "🔧 ᴀᴩɪ ᴄᴏɴꜰɪɢ" and is_admin(m.from_user.id) and not is_group(m))
-def api_config_btn(m):
-    uid = m.from_user.id
-    admin_page[uid] = 7
-    text = (
-        "<b>🔧 ᴀᴩɪ ᴄᴏɴꜰɪɢᴜʀᴀᴛɪᴏɴ</b>\n"
-        "━━━━━━━━━━━━━━━━━━\n"
-        "📋 ᴀᴩɪ ʟɪꜱᴛ → Show all configs\n"
-        "✏️ ᴇᴅɪᴛ ᴀᴩɪ → Change URL/Key/Params\n"
-        "🧪 ᴛᴇꜱᴛ ᴀᴩɪ → Test any config\n"
-        "🔄 ᴇɴᴀʙʟᴇ/ᴅɪꜱᴀʙʟᴇ → Toggle features"
-    )
-    bot.send_message(uid, format_message(text), reply_markup=admin_keyboard(uid))
+@bot.message_handler(func=lambda m: m.text == "📊 ᴄᴀᴄʜᴇ ꜱᴛᴀᴛꜱ" and is_admin(m.from_user.id) and not is_group(m))
+def cache_stats_btn(m):
+    stats = cache_get_all_stats()
+    text = "<b>📊 ᴄᴀᴄʜᴇ ꜱᴛᴀᴛɪꜱᴛɪᴄꜱ</b>\n━━━━━━━━━━━━━━━━━━\n"
+    total_items = 0
+    total_hits = 0
+    for table, data in stats.items():
+        text += f"📌 <b>{table.upper()}</b>: {data['count']} items | {data['hits']} hits\n"
+        total_items += data['count']
+        total_hits += data['hits']
+    text += f"\n━━━━━━━━━━━━━━━━━━\n📦 <b>Total Items:</b> {total_items}\n🎯 <b>Total Hits:</b> {total_hits}"
+    bot.reply_to(m, format_message(text), parse_mode='HTML')
 
 # ==================== FEATURE HANDLERS ====================
 
@@ -1176,13 +1314,13 @@ def ff_btn(m):
 def hitek_num_btn(m):
     uid = m.from_user.id
     user_state[uid] = "waiting_hitek_num"
-    bot.reply_to(m, format_message("<b>💎 Send number for Hitek Info:</b>\nExample: <code>9876543210</code>"), parse_mode='HTML')
+    bot.reply_to(m, format_message("<b>💎 Send number for Hitek:</b>\nExample: <code>9876543210</code>"), parse_mode='HTML')
 
 @bot.message_handler(func=lambda m: m.text == "🌟 ʜɪᴛᴇᴋ-ꜰᴜʟʟ-ɪɴꜰᴏ 👑" and not is_group(m))
 def hitek_full_btn(m):
     uid = m.from_user.id
     user_state[uid] = "waiting_hitek_full"
-    bot.reply_to(m, format_message("<b>🌟 Send query for Hitek Full Info:</b>\nExample: <code>Rahul Kumar</code>"), parse_mode='HTML')
+    bot.reply_to(m, format_message("<b>🌟 Send query for Hitek Full:</b>\nExample: <code>Rahul Kumar</code>"), parse_mode='HTML')
 
 @bot.message_handler(func=lambda m: m.text == "👤 ꜱᴇʟᴇᴄᴛ ᴜꜱᴇʀ" and not is_group(m))
 def select_user_btn(m):
@@ -1193,7 +1331,7 @@ def select_user_btn(m):
         markup.add(KeyboardButton("🔙 Main Menu"))
         bot.send_message(uid, format_message("<b>👤 Click 'Select User' button:</b>"), reply_markup=markup, parse_mode='HTML')
     except Exception:
-        bot.send_message(uid, format_message("<b>❌ Select User feature needs update. Use /userid command instead.</b>"), parse_mode='HTML')
+        bot.send_message(uid, format_message("<b>❌ Use /userid command instead.</b>"), parse_mode='HTML')
 
 @bot.message_handler(content_types=['users_shared'])
 def handle_user_shared(message):
@@ -1226,7 +1364,7 @@ def handle_user_shared(message):
 def username_btn(m):
     uid = m.from_user.id
     user_state[uid] = "waiting_username"
-    bot.reply_to(m, format_message("<b>🔍 Send Telegram username:</b>\nExample: <code>@username</code>"), parse_mode='HTML')
+    bot.reply_to(m, format_message("<b>🔍 Send Telegram username with @:</b>\nExample: <code>@username</code>"), parse_mode='HTML')
 
 @bot.message_handler(func=lambda m: m.text == "🆔 ᴛɢ ɪᴅ ɪɴꜰᴏ" and not is_group(m))
 def userid_btn(m):
@@ -1240,22 +1378,11 @@ def balance_btn(m):
     credits = get_credits(uid)
     refs = get_referral_count(uid)
     money = get_money(uid)
-    user = get_user(uid)
-    is_prem = False
-    if user and user[7] == 1 and user[8]:
-        try:
-            until = datetime.strptime(user[8], "%Y-%m-%d %H:%M:%S")
-            if until > datetime.now():
-                is_prem = True
-        except Exception:
-            pass
-    
     text = f"""
 <b>💰 ʙᴀʟᴀɴᴄᴇ</b>
 <b>₹ ᴍᴏɴᴇʏ:</b> <code>₹{money}</code>
 <b>💎 ᴄʀᴇᴅɪᴛꜱ:</b> <code>{credits}</code>
 <b>👥 ʀᴇꜰᴇʀʀᴀʟꜱ:</b> <code>{refs}</code>
-<b>💎 ᴩʀᴇᴍɪᴜᴍ:</b> {'✅ Active' if is_prem else '❌ No'}
 """
     bot.reply_to(m, format_message(text), parse_mode='HTML')
 
@@ -1266,7 +1393,7 @@ def daily_btn(m):
         credits = get_credits(uid)
         bot.reply_to(m, format_message(f"<b>✅ +{DAILY_CREDITS} credits!</b>\n💰 Total: <code>{credits}</code>"), parse_mode='HTML')
     else:
-        bot.reply_to(m, format_message("<b>❌ Already claimed today!</b>\n⏳ Come back tomorrow."), parse_mode='HTML')
+        bot.reply_to(m, format_message("<b>❌ Already claimed!</b>\n⏳ Come back tomorrow."), parse_mode='HTML')
 
 @bot.message_handler(func=lambda m: m.text == "👥 ʀᴇꜰᴇʀʀᴀʟꜱ" and not is_group(m))
 def referral_btn(m):
@@ -1274,13 +1401,12 @@ def referral_btn(m):
     count = get_referral_count(uid)
     link = f"https://t.me/{bot.get_me().username}?start={uid}"
     credits = get_credits(uid)
-    
     text = f"""
 <b>👥 ʀᴇꜰᴇʀʀᴀʟꜱ</b>
 <b>📊 Total:</b> <code>{count}</code>
 <b>🔗 Your Link:</b>
 <code>{link}</code>
-<b>🎁 Per Referral:</b> <code>+{REFERRAL_CREDITS}</code> credits
+<b>🎁 Per Referral:</b> <code>+{REFERRAL_CREDITS}</code>
 <b>💰 Your Credits:</b> <code>{credits}</code>
 """
     bot.reply_to(m, format_message(text), parse_mode='HTML')
@@ -1359,7 +1485,6 @@ def cb_buy_premium(c):
         bot.answer_callback_query(c.id, f"❌ ₹{needed} aur chahiye!", show_alert=True)
         return
     
-    # Check if already premium
     user = get_user(uid)
     now_dt = datetime.now()
     start_from = now_dt
@@ -1374,7 +1499,12 @@ def cb_buy_premium(c):
     remove_money(uid, price)
     until = start_from + timedelta(days=days)
     until_str = until.strftime("%Y-%m-%d %H:%M:%S")
-    update_user(uid, is_premium=1, premium_until=until_str)
+    
+    conn = sqlite3.connect('bot.db', timeout=5)
+    c_cur = conn.cursor()
+    c_cur.execute("UPDATE users SET is_premium=1, premium_until=? WHERE user_id=?", (until_str, uid))
+    conn.commit()
+    conn.close()
     
     new_money = get_money(uid)
     plan_names = {30: "1 Month", 15: "15 Days", 7: "7 Days", 1: "1 Day"}
@@ -1382,11 +1512,11 @@ def cb_buy_premium(c):
     
     bot.edit_message_text(
         format_message(
-            f"<b>✅ ᴩʀᴇᴍɪᴜᴍ ᴀᴄᴛɪᴠᴀᴛᴇᴅ!</b>\n"
+            f"<b>✅ Premium Activated!</b>\n"
             f"━━━━━━━━━━━━━━━━━━\n"
-            f"📅 <b>ᴩʟᴀɴ:</b> {plan_name}\n"
-            f"⏳ <b>ᴇxᴩɪʀᴇꜱ:</b> <code>{until_str}</code>\n"
-            f"₹ <b>ʀᴇᴍᴀɪɴɪɴɢ:</b> <code>₹{new_money}</code>\n"
+            f"📅 Plan: {plan_name}\n"
+            f"⏳ Expires: <code>{until_str}</code>\n"
+            f"₹ Remaining: <code>₹{new_money}</code>\n"
             f"━━━━━━━━━━━━━━━━━━\n"
             f"✨ Enjoy Unlimited Features! 🎉"
         ),
@@ -1400,7 +1530,8 @@ CLONE_BOT_REFERRALS_NEEDED = 20
 
 @bot.message_handler(func=lambda m: m.text == "🤖 ᴄʟᴏɴᴇ ʙᴏᴛ" and not is_group(m))
 def clonebot_btn(m):
-    uid = m.from_user.id    refs = get_referral_count(uid)
+    uid = m.from_user.id
+    refs = get_referral_count(uid)
     
     if is_admin(uid):
         refs = CLONE_BOT_REFERRALS_NEEDED
@@ -1410,18 +1541,18 @@ def clonebot_btn(m):
         bar_done = int((refs / CLONE_BOT_REFERRALS_NEEDED) * 10)
         bar = "█" * bar_done + "░" * (10 - bar_done)
         text = f"""
-<b>🤖 ᴄʟᴏɴᴇ ʙᴏᴛ</b>
+<b>🤖 Clone Bot</b>
 ━━━━━━━━━━━━━━━━━━
-📊 ᴩʀᴏɢʀᴇꜱꜱ: [{bar}] {refs}/{CLONE_BOT_REFERRALS_NEEDED}
-❌ ꜱᴛɪʟʟ ɴᴇᴇᴅᴇᴅ: <b>{needed} ᴍᴏʀᴇ ʀᴇꜰᴇʀʀᴀʟꜱ</b>
+📊 Progress: [{bar}] {refs}/{CLONE_BOT_REFERRALS_NEEDED}
+❌ Still needed: <b>{needed} more referrals</b>
 
-👥 Refer karo aur apna khud ka bot pao! 🎉
+👥 Refer karo aur apna bot pao! 🎉
 """
         bot.reply_to(m, format_message(text), parse_mode='HTML')
         return
     
     text = f"""
-<b>🤖 ᴄʟᴏɴᴇ ʙᴏᴛ</b>
+<b>🤖 Clone Bot</b>
 ━━━━━━━━━━━━━━━━━━
 ✅ Congratulations! {refs} referrals complete!
 
@@ -1441,41 +1572,25 @@ def process_clone_token(m):
     token = m.text.strip() if m.text else ''
     
     if not token or ':' not in token or len(token) < 30:
-        bot.send_message(uid, format_message("<b>❌ Invalid token! Try again.</b>"), parse_mode='HTML')
+        bot.send_message(uid, format_message("<b>❌ Invalid token!</b>"), parse_mode='HTML')
         return
     
     try:
-        lc = sqlite3.connect('bot.db', timeout=5)
-        lcc = lc.cursor()
-        lcc.execute(
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        c.execute(
             "INSERT OR REPLACE INTO clone_bots (user_id, token, status, requested_at) VALUES (?,?,?,?)",
             (uid, token, 'pending', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         )
-        lc.commit()
-        lc.close()
+        conn.commit()
+        conn.close()
     except Exception as e:
         bot.send_message(uid, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
         return
     
-    # Notify admin
-    try:
-        owner_text = f"""
-<b>🤖 ɴᴇᴡ ᴄʟᴏɴᴇ ʀᴇQᴜᴇꜱᴛ!</b>
-━━━━━━━━━━━━━━━━━━
-👤 User: <code>{uid}</code>
-📊 Referrals: <b>{get_referral_count(uid)}</b>
-🔑 Token: <code>{token}</code>
-
-✅ Approve: Admin Panel → Clone Bots
-"""
-        bot.send_message(OWNER_ID, format_message(owner_text), parse_mode='HTML')
-    except Exception:
-        pass
-    
     bot.send_message(uid, format_message(
-        "<b>✅ ᴄʟᴏɴᴇ ʀᴇQᴜᴇꜱᴛ ꜱᴇɴᴛ!</b>\n"
-        "Admin approve karte hi bot start ho jayega!\n"
-        "📞 Contact: @Guptaji_302"
+        "<b>✅ Clone request sent!</b>\n"
+        "Admin approve karte hi bot start ho jayega!"
     ), parse_mode='HTML')
 
 # ==================== MY HISTORY ====================
@@ -1487,8 +1602,8 @@ def my_history_btn(m):
     conn = sqlite3.connect('bot.db', timeout=5)
     c = conn.cursor()
     try:
-        searches = c.execute("SELECT search_type, query, search_date FROM search_history WHERE user_id=? ORDER BY search_date DESC LIMIT 10", (uid,)).fetchall()
-        bomber = c.execute("SELECT target_number, sms_sent, calls_sent, status, started_at FROM bomber_history WHERE user_id=? ORDER BY id DESC LIMIT 5", (uid,)).fetchall()
+        searches = c.execute("SELECT search_type, query, search_date FROM search_history WHERE user_id=? ORDER BY search_date DESC LIMIT 5", (uid,)).fetchall()
+        bomber = c.execute("SELECT target_number, sms_sent, calls_sent, status, started_at FROM bomber_history WHERE user_id=? ORDER BY id DESC LIMIT 3", (uid,)).fetchall()
         total_searches = c.execute("SELECT COUNT(*) FROM search_history WHERE user_id=?", (uid,)).fetchone()[0]
     except Exception:
         searches = []
@@ -1497,11 +1612,11 @@ def my_history_btn(m):
     finally:
         conn.close()
     
-    text = f"<b>📋 ᴍʏ ʜɪꜱᴛᴏʀʏ</b>\n━━━━━━━━━━━━━━━━━━\n📊 <b>Total Searches:</b> <code>{total_searches}</code>\n━━━━━━━━━━━━━━━━━━\n"
+    text = f"<b>📋 My History</b>\n━━━━━━━━━━━━━━━━━━\n📊 Total Searches: <code>{total_searches}</code>\n━━━━━━━━━━━━━━━━━━\n"
     
     if searches:
         text += "<b>🔍 Recent Searches:</b>\n"
-        for stype, query, sdate in searches[:5]:
+        for stype, query, sdate in searches:
             icon = '📱' if 'number' in stype else '🆔' if 'aadhar' in stype else '📷' if 'instagram' in stype else '🔍'
             text += f"{icon} <code>{query[:20]}</code> | {sdate[:10]}\n"
     else:
@@ -1509,7 +1624,7 @@ def my_history_btn(m):
     
     if bomber:
         text += "\n<b>💣 Recent Bombs:</b>\n"
-        for num, sms, calls, status, started in bomber[:3]:
+        for num, sms, calls, status, started in bomber:
             icon = '✅' if status == 'done' else '🛑'
             text += f"{icon} <code>{num}</code> | SMS:{sms} Calls:{calls}\n"
     
@@ -1520,24 +1635,20 @@ def my_history_btn(m):
 @bot.message_handler(func=lambda m: m.text == "🔑 ᴍʏ ᴀᴩɪ ᴋᴇʏꜱ" and not is_group(m))
 def my_api_keys_btn(m):
     uid = m.from_user.id
-    
     text = f"""
-<b>🔑 ᴍʏ ᴀᴩɪ ᴋᴇʏꜱ</b>
+<b>🔑 My API Keys</b>
 ━━━━━━━━━━━━━━━━━━
-📋 <b>Your API Keys:</b>
-
-💡 Generate API keys from admin panel
+💡 API keys generate karne ke liye admin se contact karo.
 📌 Contact: @Guptaji_302
 """
     bot.reply_to(m, format_message(text), parse_mode='HTML')
 
-# ==================== BOMBER HANDLERS ====================
+# ==================== BOMBER ====================
 
 @bot.message_handler(func=lambda m: m.text == "💣 ʙᴏᴍʙᴇʀ" and not is_group(m))
 def bomber_menu_btn(m):
     uid = m.from_user.id
     
-    # Check premium status
     user = get_user(uid)
     is_prem = False
     if user and user[7] == 1 and user[8]:
@@ -1553,7 +1664,7 @@ def bomber_menu_btn(m):
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(
         KeyboardButton("💣 ꜰʀᴇᴇ ʙᴏᴍʙᴇʀ"),
-        KeyboardButton("💎 ᴩᴀɪᴅ ʙᴏᴍʙᴇʀ 👑" if is_prem else "💎 ᴩᴀɪᴅ ʙᴏᴍʙᴇʀ 🔒")
+        KeyboardButton("💎 ᴩᴀɪᴅ ʙᴏᴍʙᴇʀ" if is_prem else "💎 ᴩᴀɪᴅ ʙᴏᴍʙᴇʀ 🔒")
     )
     markup.add(
         KeyboardButton("🛑 ꜱᴛᴏᴩ ʙᴏᴍʙᴇʀ"),
@@ -1563,12 +1674,12 @@ def bomber_menu_btn(m):
     
     status = ""
     if bomber_active.get(uid):
-        status = "\n🟢 <b>Active:</b> Free bomber running"
+        status = "\n🟢 Active: Free bomber running"
     if paid_bomber_active.get(uid):
-        status = "\n💎 <b>Active:</b> Paid bomber running"
+        status = "\n💎 Active: Paid bomber running"
     
     bot.reply_to(m, format_message(
-        f"<b>💣 ʙᴏᴍʙᴇʀ ᴍᴇɴᴜ</b>\n"
+        f"<b>💣 Bomber Menu</b>\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"💣 Free Bomber — 150 SMS/sec + 50 Calls/sec (5 min)\n"
         f"💎 Paid Bomber — Unlimited time (Premium only)\n"
@@ -1580,25 +1691,24 @@ def free_bomber_btn(m):
     uid = m.from_user.id
     
     if bomber_active.get(uid):
-        bot.reply_to(m, format_message("<b>⚠️ Already running! Use stop button first.</b>"), parse_mode='HTML')
+        bot.reply_to(m, format_message("<b>⚠️ Already running! Stop first.</b>"), parse_mode='HTML')
         return
     
     user_state[uid] = "waiting_bomber_free"
     bot.reply_to(m, format_message(
-        "<b>💣 ꜰʀᴇᴇ ʙᴏᴍʙᴇʀ</b>\n"
+        "<b>💣 Free Bomber</b>\n"
         "━━━━━━━━━━━━━━━━━━\n"
-        "📱 <b>Target number bhejo:</b>\n"
-        "<i>Example: +919876543210</i>\n\n"
+        "📱 Target number bhejo:\n"
+        "<i>Example: 9876543210</i>\n\n"
         "⚡ Speed: 150 SMS/sec + 50 Calls/sec\n"
         "⏱️ Max: 5 minutes\n"
         "⚠️ <b>Sirf apna number!</b>"
     ), parse_mode='HTML')
 
-@bot.message_handler(func=lambda m: m.text == "💎 ᴩᴀɪᴅ ʙᴏᴍʙᴇʀ 👑" and not is_group(m))
+@bot.message_handler(func=lambda m: m.text == "💎 ᴩᴀɪᴅ ʙᴏᴍʙᴇʀ" and not is_group(m))
 def paid_bomber_btn(m):
     uid = m.from_user.id
     
-    # Check premium
     user = get_user(uid)
     is_prem = False
     if user and user[7] == 1 and user[8]:
@@ -1613,7 +1723,7 @@ def paid_bomber_btn(m):
     
     if not is_prem:
         bot.reply_to(m, format_message(
-            "<b>💎 ᴩʀᴇᴍɪᴜᴍ ʀᴇQᴜɪʀᴇᴅ!</b>\n"
+            "<b>💎 Premium Required!</b>\n"
             "━━━━━━━━━━━━━━━━━━\n"
             "Paid Bomber sirf Premium users ke liye!\n"
             "💳 Purchase Premium button use karo."
@@ -1621,15 +1731,15 @@ def paid_bomber_btn(m):
         return
     
     if paid_bomber_active.get(uid):
-        bot.reply_to(m, format_message("<b>⚠️ Already running! Use stop button first.</b>"), parse_mode='HTML')
+        bot.reply_to(m, format_message("<b>⚠️ Already running! Stop first.</b>"), parse_mode='HTML')
         return
     
     user_state[uid] = "waiting_bomber_paid"
     bot.reply_to(m, format_message(
-        "<b>💎 ᴩᴀɪᴅ ʙᴏᴍʙᴇʀ</b>\n"
+        "<b>💎 Paid Bomber</b>\n"
         "━━━━━━━━━━━━━━━━━━\n"
-        "📱 <b>Target number bhejo:</b>\n"
-        "<i>Example: +919876543210</i>\n\n"
+        "📱 Target number bhejo:\n"
+        "<i>Example: 9876543210</i>\n\n"
         "⚡ Speed: 150 SMS/sec + 50 Calls/sec\n"
         "⏱️ Max: Unlimited (Premium)\n"
         "⚠️ <b>Sirf apna number!</b>"
@@ -1648,9 +1758,9 @@ def stop_bomber_btn(m):
         stopped = True
     
     if stopped:
-        bot.reply_to(m, format_message("<b>🛑 ʙᴏᴍʙᴇʀ ꜱᴛᴏᴩᴩᴇᴅ!</b>"), parse_mode='HTML')
+        bot.reply_to(m, format_message("<b>🛑 Bomber stopped!</b>"), parse_mode='HTML')
     else:
-        bot.reply_to(m, format_message("<b>ℹ️ Koi active bomber nahi hai!</b>"), parse_mode='HTML')
+        bot.reply_to(m, format_message("<b>ℹ️ No active bomber!</b>"), parse_mode='HTML')
 
 @bot.message_handler(func=lambda m: m.text == "📜 ʙᴏᴍʙᴇʀ ʜɪꜱᴛᴏʀʏ" and not is_group(m))
 def bomber_history_btn(m):
@@ -1661,17 +1771,19 @@ def bomber_history_btn(m):
         bot.reply_to(m, format_message("<b>📜 No bombing history yet!</b>"), parse_mode='HTML')
         return
     
-    text = "<b>📜 ʙᴏᴍʙᴇʀ ʜɪꜱᴛᴏʀʏ</b>\n━━━━━━━━━━━━━━━━━━\n"
+    text = "<b>📜 Bomber History</b>\n━━━━━━━━━━━━━━━━━━\n"
     for num, sms, calls, status, started in rows:
         icon = "✅" if status == "done" else "🛑"
         text += f"{icon} <code>{num}</code> | SMS:{sms} Calls:{calls} | {started[:10]}\n"
     
     bot.reply_to(m, format_message(text), parse_mode='HTML')
 
+# ==================== HELP ====================
+
 @bot.message_handler(func=lambda m: m.text == "ℹ️ ʜᴇʟᴩ" and not is_group(m))
 def help_btn(m):
     text = """
-<b>ℹ️ ʜᴇʟᴩ & ɢᴜɪᴅᴇ</b>
+<b>ℹ️ Help & Guide</b>
 ━━━━━━━━━━━━━━━━━━
 📱 Number Info — Mobile owner, operator
 🆔 Aadhar Info — 12-digit Aadhar details
@@ -1692,12 +1804,13 @@ def help_btn(m):
 
 💰 Credits: Daily claim + Referrals
 💎 Premium: Unlimited access + Unlimited Bomber
+💾 Cache: All searches saved for future
 
 👑 Made by: @Guptaji_302
 """
     bot.reply_to(m, format_message(text), parse_mode='HTML')
 
-# ==================== TEXT INPUT HANDLER ====================
+# ==================== TEXT INPUT ====================
 
 def is_group(message):
     return message.chat.type in ['group', 'supergroup']
@@ -1711,63 +1824,11 @@ def handle_text_input(m):
     if not text:
         return
     
-    # ========== BOMBER FREE ==========
-    if state == "waiting_bomber_free":
-        clean = re.sub(r'[^\d+]', '', text)
-        if len(clean) < 10:
-            bot.reply_to(m, format_message("<b>❌ Invalid number!</b>"), parse_mode='HTML')
-            return
-        
-        if bomber_active.get(uid):
-            bot.reply_to(m, format_message("<b>⚠️ Already running!</b>"), parse_mode='HTML')
-            user_state.pop(uid, None)
-            return
-        
-        user_state.pop(uid, None)
-        status_msg = bot.send_message(m.chat.id, format_message(
-            f"<b>💣 ꜱᴛᴀʀᴛɪɴɢ ʙᴏᴍʙᴇʀ...</b>\n"
-            f"📱 Target: <code>{clean}</code>\n"
-            f"⚡ 150 SMS/sec + 50 Calls/sec\n"
-            f"⏱️ Max: 5 minutes"
-        ), parse_mode='HTML')
-        
-        threading.Thread(
-            target=_run_bomber,
-            args=(bot, m.chat.id, uid, clean, status_msg.message_id, False),
-            daemon=True
-        ).start()
-    
-    # ========== BOMBER PAID ==========
-    elif state == "waiting_bomber_paid":
-        clean = re.sub(r'[^\d+]', '', text)
-        if len(clean) < 10:
-            bot.reply_to(m, format_message("<b>❌ Invalid number!</b>"), parse_mode='HTML')
-            return
-        
-        if paid_bomber_active.get(uid):
-            bot.reply_to(m, format_message("<b>⚠️ Already running!</b>"), parse_mode='HTML')
-            user_state.pop(uid, None)
-            return
-        
-        user_state.pop(uid, None)
-        status_msg = bot.send_message(m.chat.id, format_message(
-            f"<b>💎 ᴩᴀɪᴅ ʙᴏᴍʙᴇʀ ꜱᴛᴀʀᴛɪɴɢ...</b>\n"
-            f"📱 Target: <code>{clean}</code>\n"
-            f"⚡ 150 SMS/sec + 50 Calls/sec\n"
-            f"⏱️ Max: Unlimited (Premium)"
-        ), parse_mode='HTML')
-        
-        threading.Thread(
-            target=_run_bomber,
-            args=(bot, m.chat.id, uid, clean, status_msg.message_id, True),
-            daemon=True
-        ).start()
-    
-    # ========== OTHER FEATURES ==========
-    elif state == "waiting_number":
+    # ========== NUMBER ==========
+    if state == "waiting_number":
         clean = re.sub(r'[^\d]', '', text)
         if len(clean) < 10:
-            bot.reply_to(m, format_message("<b>❌ Invalid number!</b>"), parse_mode='HTML')
+            bot.reply_to(m, format_message("<b>❌ Invalid number! Send 10-digit.</b>"), parse_mode='HTML')
             return
         
         status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
@@ -1785,10 +1846,11 @@ def handle_text_input(m):
             msg = result.get('msg', 'No data found')
             bot.edit_message_text(format_message(f"<b>❌ {msg}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
     
+    # ========== AADHAR ==========
     elif state == "waiting_aadhar":
         clean = re.sub(r'\s+', '', text)
         if not re.match(r'^\d{12}$', clean):
-            bot.reply_to(m, format_message("<b>❌ Invalid Aadhar!</b>"), parse_mode='HTML')
+            bot.reply_to(m, format_message("<b>❌ Invalid Aadhar! 12 digits.</b>"), parse_mode='HTML')
             return
         
         status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
@@ -1806,9 +1868,10 @@ def handle_text_input(m):
             msg = result.get('msg', 'No data found')
             bot.edit_message_text(format_message(f"<b>❌ {msg}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
     
+    # ========== UPI ==========
     elif state == "waiting_upi":
         if '@' not in text:
-            bot.reply_to(m, format_message("<b>❌ Invalid UPI ID!</b>"), parse_mode='HTML')
+            bot.reply_to(m, format_message("<b>❌ Invalid UPI ID! Must contain @</b>"), parse_mode='HTML')
             return
         
         status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
@@ -1826,6 +1889,7 @@ def handle_text_input(m):
             msg = result.get('msg', 'No data found')
             bot.edit_message_text(format_message(f"<b>❌ {msg}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
     
+    # ========== INSTAGRAM ==========
     elif state == "waiting_instagram":
         clean = text.replace('@', '').strip()
         if len(clean) < 2:
@@ -1837,7 +1901,7 @@ def handle_text_input(m):
         user_state.pop(uid, None)
         
         if result and result.get('success'):
-            formatted = format_generic_result(result, "📷 𝗜𝗡𝗦𝗧𝗔𝗚𝗥𝗔𝗠 𝗜𝗡𝗙𝗢", "👤 Username", clean)
+            formatted = format_generic_result(result, "📷 Instagram Info", "👤 Username", clean)
             try:
                 bot.edit_message_text(formatted, m.chat.id, status.message_id, parse_mode='HTML')
             except Exception:
@@ -1847,7 +1911,390 @@ def handle_text_input(m):
             msg = result.get('msg', 'No data found')
             bot.edit_message_text(format_message(f"<b>❌ {msg}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
     
-    # ... (rest of features remain same)
+    # ========== IFSC ==========
+    elif state == "waiting_ifsc":
+        clean = text.upper().strip()
+        if len(clean) != 11:
+            bot.reply_to(m, format_message("<b>❌ Invalid IFSC! 11 characters.</b>"), parse_mode='HTML')
+            return
+        
+        status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
+        result = get_ifsc_info(clean)
+        user_state.pop(uid, None)
+        
+        if result and result.get('success'):
+            formatted = format_generic_result(result, "🏦 IFSC Info", "🏦 IFSC", clean)
+            try:
+                bot.edit_message_text(formatted, m.chat.id, status.message_id, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            save_search_history(uid, 'ifsc', clean, result)
+        else:
+            msg = result.get('msg', 'No data found')
+            bot.edit_message_text(format_message(f"<b>❌ {msg}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
+    
+    # ========== VEHICLE ==========
+    elif state == "waiting_vehicle":
+        clean = re.sub(r'\s+', '', text).upper()
+        if len(clean) < 8:
+            bot.reply_to(m, format_message("<b>❌ Invalid RC number!</b>"), parse_mode='HTML')
+            return
+        
+        status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
+        result = get_vehicle_info(clean)
+        user_state.pop(uid, None)
+        
+        if result and result.get('success'):
+            formatted = format_generic_result(result, "🚗 Vehicle Info", "🚗 RC", clean)
+            try:
+                bot.edit_message_text(formatted, m.chat.id, status.message_id, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            save_search_history(uid, 'vehicle', clean, result)
+        else:
+            msg = result.get('msg', 'No data found')
+            bot.edit_message_text(format_message(f"<b>❌ {msg}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
+    
+    # ========== GST ==========
+    elif state == "waiting_gst":
+        clean = text.upper().strip()
+        if len(clean) < 10:
+            bot.reply_to(m, format_message("<b>❌ Invalid GST number!</b>"), parse_mode='HTML')
+            return
+        
+        status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
+        result = get_gst_info(clean)
+        user_state.pop(uid, None)
+        
+        if result and result.get('success'):
+            formatted = format_generic_result(result, "💼 GST Info", "💼 GST", clean)
+            try:
+                bot.edit_message_text(formatted, m.chat.id, status.message_id, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            save_search_history(uid, 'gst', clean, result)
+        else:
+            msg = result.get('msg', 'No data found')
+            bot.edit_message_text(format_message(f"<b>❌ {msg}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
+    
+    # ========== PAN ==========
+    elif state == "waiting_pan":
+        clean = text.upper().strip()
+        if not re.match(r'^[A-Z]{5}[0-9]{4}[A-Z]$', clean):
+            bot.reply_to(m, format_message("<b>❌ Invalid PAN! Format: ABCDE1234F</b>"), parse_mode='HTML')
+            return
+        
+        status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
+        result = get_pan_info(clean)
+        user_state.pop(uid, None)
+        
+        if result and result.get('success'):
+            formatted = format_generic_result(result, "🪪 PAN Info", "🪪 PAN", clean)
+            try:
+                bot.edit_message_text(formatted, m.chat.id, status.message_id, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            save_search_history(uid, 'pan', clean, result)
+        else:
+            msg = result.get('msg', 'No data found')
+            bot.edit_message_text(format_message(f"<b>❌ {msg}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
+    
+    # ========== PAK NUM ==========
+    elif state == "waiting_pak":
+        clean = re.sub(r'[^\d]', '', text)
+        if len(clean) < 10:
+            bot.reply_to(m, format_message("<b>❌ Invalid Pakistan number!</b>"), parse_mode='HTML')
+            return
+        
+        status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
+        result = get_pak_num_info(clean)
+        user_state.pop(uid, None)
+        
+        if result and result.get('success'):
+            formatted = format_generic_result(result, "🇵🇰 Pak Number Info", "🇵🇰 Number", clean)
+            try:
+                bot.edit_message_text(formatted, m.chat.id, status.message_id, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            save_search_history(uid, 'pak_num', clean, result)
+        else:
+            msg = result.get('msg', 'No data found')
+            bot.edit_message_text(format_message(f"<b>❌ {msg}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
+    
+    # ========== PINCODE ==========
+    elif state == "waiting_pincode":
+        clean = re.sub(r'[^\d]', '', text)
+        if len(clean) != 6:
+            bot.reply_to(m, format_message("<b>❌ Invalid pincode! 6 digits.</b>"), parse_mode='HTML')
+            return
+        
+        status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
+        result = get_pincode_info(clean)
+        user_state.pop(uid, None)
+        
+        if result and result.get('success'):
+            formatted = format_generic_result(result, "📍 Pincode Info", "📍 Pincode", clean)
+            try:
+                bot.edit_message_text(formatted, m.chat.id, status.message_id, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            save_search_history(uid, 'pincode', clean, result)
+        else:
+            msg = result.get('msg', 'No data found')
+            bot.edit_message_text(format_message(f"<b>❌ {msg}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
+    
+    # ========== FREE FIRE ==========
+    elif state == "waiting_ff":
+        clean = re.sub(r'[^\d]', '', text)
+        if len(clean) < 5:
+            bot.reply_to(m, format_message("<b>❌ Invalid Free Fire UID!</b>"), parse_mode='HTML')
+            return
+        
+        status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
+        result = get_ff_info(clean)
+        user_state.pop(uid, None)
+        
+        if result and result.get('success'):
+            formatted = format_generic_result(result, "🎮 Free Fire Info", "🎮 UID", clean)
+            try:
+                bot.edit_message_text(formatted, m.chat.id, status.message_id, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            save_search_history(uid, 'ff', clean, result)
+        else:
+            msg = result.get('msg', 'No data found')
+            bot.edit_message_text(format_message(f"<b>❌ {msg}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
+    
+    # ========== HITEK NUM ==========
+    elif state == "waiting_hitek_num":
+        clean = re.sub(r'[^\d]', '', text)
+        if len(clean) < 10:
+            bot.reply_to(m, format_message("<b>❌ Invalid number!</b>"), parse_mode='HTML')
+            return
+        
+        status = bot.reply_to(m, format_message("<b>💎 Searching Hitek...</b>"), parse_mode='HTML')
+        result = get_hitek_num_info(clean)
+        user_state.pop(uid, None)
+        
+        if result and result.get('success'):
+            formatted = format_generic_result(result, "💎 Hitek Num Info", "📱 Number", clean)
+            try:
+                bot.edit_message_text(formatted, m.chat.id, status.message_id, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            save_search_history(uid, 'hitek_num', clean, result)
+        else:
+            msg = result.get('msg', 'No data found')
+            bot.edit_message_text(format_message(f"<b>❌ {msg}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
+    
+    # ========== HITEK FULL ==========
+    elif state == "waiting_hitek_full":
+        if len(text) < 2:
+            bot.reply_to(m, format_message("<b>❌ Invalid query! Min 2 chars.</b>"), parse_mode='HTML')
+            return
+        
+        status = bot.reply_to(m, format_message("<b>🌟 Searching Hitek Full...</b>"), parse_mode='HTML')
+        result = get_hitek_full_info(text)
+        user_state.pop(uid, None)
+        
+        if result and result.get('success'):
+            formatted = format_generic_result(result, "🌟 Hitek Full Info", "🔍 Query", text)
+            try:
+                bot.edit_message_text(formatted, m.chat.id, status.message_id, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            save_search_history(uid, 'hitek_full', text, result)
+        else:
+            msg = result.get('msg', 'No data found')
+            bot.edit_message_text(format_message(f"<b>❌ {msg}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
+    
+    # ========== TELEGRAM USERNAME ==========
+    elif state == "waiting_username":
+        clean = text.replace('@', '').strip()
+        if len(clean) < 2:
+            bot.reply_to(m, format_message("<b>❌ Invalid username!</b>"), parse_mode='HTML')
+            return
+        
+        status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
+        try:
+            chat = bot.get_chat(f"@{clean}")
+            photo_file_id = None
+            try:
+                photos = bot.get_user_profile_photos(chat.id, limit=1)
+                if photos and photos.photos:
+                    photo_file_id = photos.photos[0][-1].file_id
+            except Exception:
+                pass
+            
+            result = {
+                'success': True,
+                'data': [{
+                    'user_id': chat.id,
+                    'username': chat.username or clean,
+                    'first_name': chat.first_name or '',
+                    'last_name': chat.last_name or '',
+                    'full_name': f"{chat.first_name or ''} {chat.last_name or ''}".strip(),
+                    'bio': getattr(chat, 'bio', '') or '',
+                }]
+            }
+            
+            formatted = format_generic_result(result, "🔍 Username Info", "👤 Username", f"@{clean}")
+            user_state.pop(uid, None)
+            
+            try:
+                bot.delete_message(m.chat.id, status.message_id)
+                if photo_file_id:
+                    bot.send_photo(m.chat.id, photo_file_id, caption=formatted, parse_mode='HTML')
+                else:
+                    bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            
+            save_search_history(uid, 'username', clean, result)
+            
+        except Exception as e:
+            bot.edit_message_text(
+                format_message(f"<b>❌ User not found: @{clean}</b>\n\n"
+                              "💡 Try:\n• Check spelling\n• Use /userid with numeric ID"),
+                m.chat.id, status.message_id, parse_mode='HTML'
+            )
+            user_state.pop(uid, None)
+    
+    # ========== TELEGRAM USER ID ==========
+    elif state == "waiting_userid":
+        clean = re.sub(r'[^\d]', '', text)
+        if not clean:
+            bot.reply_to(m, format_message("<b>❌ Invalid User ID! Numeric only.</b>"), parse_mode='HTML')
+            return
+        
+        status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
+        try:
+            user_id = int(clean)
+            chat = bot.get_chat(user_id)
+            
+            photo_file_id = None
+            try:
+                photos = bot.get_user_profile_photos(user_id, limit=1)
+                if photos and photos.photos:
+                    photo_file_id = photos.photos[0][-1].file_id
+            except Exception:
+                pass
+            
+            result = {
+                'success': True,
+                'data': [{
+                    'user_id': chat.id,
+                    'username': chat.username or '',
+                    'first_name': chat.first_name or '',
+                    'last_name': chat.last_name or '',
+                    'full_name': f"{chat.first_name or ''} {chat.last_name or ''}".strip(),
+                    'bio': getattr(chat, 'bio', '') or '',
+                }]
+            }
+            
+            formatted = format_generic_result(result, "🆔 TG ID Info", "🆔 ID", clean)
+            user_state.pop(uid, None)
+            
+            try:
+                bot.delete_message(m.chat.id, status.message_id)
+                if photo_file_id:
+                    bot.send_photo(m.chat.id, photo_file_id, caption=formatted, parse_mode='HTML')
+                else:
+                    bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            
+            save_search_history(uid, 'userid', clean, result)
+            
+        except Exception as e:
+            bot.edit_message_text(
+                format_message(f"<b>❌ User not found: {clean}</b>\n\n"
+                              "💡 Try:\n• Use /username with @username\n• Check if user exists"),
+                m.chat.id, status.message_id, parse_mode='HTML'
+            )
+            user_state.pop(uid, None)
+    
+    # ========== FREE BOMBER ==========
+    elif state == "waiting_bomber_free":
+        clean = re.sub(r'[^\d]', '', text)
+        if len(clean) < 10:
+            bot.reply_to(m, format_message("<b>❌ Invalid number!</b>"), parse_mode='HTML')
+            return
+        
+        if bomber_active.get(uid):
+            bot.reply_to(m, format_message("<b>⚠️ Already running!</b>"), parse_mode='HTML')
+            user_state.pop(uid, None)
+            return
+        
+        user_state.pop(uid, None)
+        status_msg = bot.send_message(m.chat.id, format_message(
+            f"<b>💣 Starting bomber...</b>\n"
+            f"📱 Target: <code>{clean}</code>\n"
+            f"⚡ 150 SMS/sec + 50 Calls/sec\n"
+            f"⏱️ Max: 5 minutes"
+        ), parse_mode='HTML')
+        
+        threading.Thread(
+            target=_run_bomber,
+            args=(bot, m.chat.id, uid, clean, status_msg.message_id, False),
+            daemon=True
+        ).start()
+    
+    # ========== PAID BOMBER ==========
+    elif state == "waiting_bomber_paid":
+        clean = re.sub(r'[^\d]', '', text)
+        if len(clean) < 10:
+            bot.reply_to(m, format_message("<b>❌ Invalid number!</b>"), parse_mode='HTML')
+            return
+        
+        if paid_bomber_active.get(uid):
+            bot.reply_to(m, format_message("<b>⚠️ Already running!</b>"), parse_mode='HTML')
+            user_state.pop(uid, None)
+            return
+        
+        user_state.pop(uid, None)
+        status_msg = bot.send_message(m.chat.id, format_message(
+            f"<b>💎 Paid bomber starting...</b>\n"
+            f"📱 Target: <code>{clean}</code>\n"
+            f"⚡ 150 SMS/sec + 50 Calls/sec\n"
+            f"⏱️ Max: Unlimited (Premium)"
+        ), parse_mode='HTML')
+        
+        threading.Thread(
+            target=_run_bomber,
+            args=(bot, m.chat.id, uid, clean, status_msg.message_id, True),
+            daemon=True
+        ).start()
+    
+    # ========== REDEEM ==========
+    elif state == "waiting_redeem":
+        code = text.upper().strip()
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        try:
+            c.execute("SELECT credits, max_uses, used_count, expires_at FROM redeem_codes WHERE code = ? AND is_active = 1", (code,))
+            row = c.fetchone()
+            if row:
+                credits, max_uses, used_count, expires_at = row
+                if used_count >= max_uses:
+                    bot.reply_to(m, format_message("<b>❌ Code fully used!</b>"), parse_mode='HTML')
+                elif expires_at and datetime.now() > datetime.strptime(expires_at, "%Y-%m-%d %H:%M:%S"):
+                    bot.reply_to(m, format_message("<b>❌ Code expired!</b>"), parse_mode='HTML')
+                else:
+                    c.execute("UPDATE redeem_codes SET used_count = used_count + 1 WHERE code = ?", (code,))
+                    c.execute("INSERT OR IGNORE INTO redeemed_users (user_id, code, redeemed_at) VALUES (?, ?, ?)",
+                              (uid, code, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                    add_credits(uid, credits)
+                    conn.commit()
+                    bot.reply_to(m, format_message(f"<b>✅ +{credits} credits!</b>\n💰 Total: <code>{get_credits(uid)}</code>"), parse_mode='HTML')
+            else:
+                bot.reply_to(m, format_message("<b>❌ Invalid code!</b>"), parse_mode='HTML')
+        except Exception as e:
+            bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+        finally:
+            conn.close()
+            user_state.pop(uid, None)
+    
     else:
         user_state.pop(uid, None)
 
@@ -1855,7 +2302,7 @@ def handle_text_input(m):
 
 def main():
     print("=" * 60)
-    print("🔥 ULTIMATE OSINT BOT STARTING...")
+    print("🔥 CACHED OSINT BOT STARTING...")
     print("=" * 60)
     
     init_db()
