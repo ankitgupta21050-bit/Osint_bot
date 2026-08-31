@@ -1,8 +1,9 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
 ║         🔥 OSINT BOT — COMPLETE WORKING VERSION 🔥              ║
-║         Dynamic API Config + Admin Panel + All Features         ║
-║         Made by: @Raizz_Baby28  |  Powered by: NITIN API       ║
+║         All Features Working + Free APIs + Dynamic Config       ║
+║         Made by: @Guptaji_302                                   ║
+║         Powered by: NITIN API + Free APIs                      ║
 ╚══════════════════════════════════════════════════════════════════╝
 """
 
@@ -17,7 +18,7 @@ import re
 import random
 import string
 import html as _html
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import platform
 import psutil
@@ -27,7 +28,7 @@ import signal as _signal
 try:
     import telebot
     from telebot.types import (
-        ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, 
+        ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup,
         InlineKeyboardButton, KeyboardButtonRequestUser, BotCommand,
         ChatMemberUpdated, CallbackQuery, Message
     )
@@ -47,7 +48,7 @@ app = Flask(__name__)
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
-    return "Bot is running ✅", 200
+    return "Bot is running ✅ | Made by @Guptaji_302", 200
 
 @app.route('/health')
 def health():
@@ -89,7 +90,7 @@ GITHUB_DB_PATH = os.environ.get("GH_DB_PATH", "database.db")
 FREE_CREDITS = 5
 DAILY_CREDITS = 1
 REFERRAL_CREDITS = 1
-BOT_CREDIT = "⚡ ʙᴏᴛ ᴍᴀᴅᴇ ʙʏ : @Raizz_Baby28"
+BOT_CREDIT = "⚡ ʙᴏᴛ ᴍᴀᴅᴇ ʙʏ : @Guptaji_302"
 
 # ==================== DATABASE FUNCTIONS ====================
 def init_db():
@@ -98,14 +99,12 @@ def init_db():
     conn = sqlite3.connect('bot.db', check_same_thread=False, timeout=30)
     c = conn.cursor()
     
-    # Enable WAL mode
     try:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
     except Exception:
         pass
     
-    # Create all tables
     c.executescript('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -241,7 +240,6 @@ def init_db():
             timestamp TEXT
         );
         
-        -- Clone Bot Tables
         CREATE TABLE IF NOT EXISTS clone_bots (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -326,7 +324,6 @@ def init_db():
             stopped_at TEXT
         );
         
-        -- ========== DYNAMIC API CONFIG TABLES ==========
         CREATE TABLE IF NOT EXISTS api_config (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             feature TEXT UNIQUE NOT NULL,
@@ -354,17 +351,20 @@ def init_db():
     
     # ========== INSERT DEFAULT API CONFIGS ==========
     default_configs = [
+        # NITIN API — Working
         ('number', 'https://nitin-developer-api-paid.nitinshab43.workers.dev/api', 'num', 'number', 'JAANI'),
         ('aadhar', 'https://nitin-developer-api-paid.nitinshab43.workers.dev/api', 'aadhar', 'aadhar', 'JAANI'),
         ('upi', 'https://nitin-developer-api-paid.nitinshab43.workers.dev/api', 'upiinfo', 'upi', 'JAANI'),
-        ('instagram', 'https://nitin-developer-api-paid.nitinshab43.workers.dev/api', 'instagram', 'username', 'JAANI'),
-        ('ifsc', 'https://nitin-developer-api-paid.nitinshab43.workers.dev/api', 'ifsc', 'ifsc', 'JAANI'),
-        ('vehicle', 'https://nitin-developer-api-paid.nitinshab43.workers.dev/api', 'vehicle', 'vehicle', 'JAANI'),
-        ('gst', 'https://nitin-developer-api-paid.nitinshab43.workers.dev/api', 'gst', 'gst', 'JAANI'),
-        ('pan', 'https://nitin-developer-api-paid.nitinshab43.workers.dev/api', 'pan', 'pan', 'JAANI'),
-        ('pak_num', 'https://nitin-developer-api-paid.nitinshab43.workers.dev/api', 'pak', 'number', 'JAANI'),
-        ('pincode', 'https://nitin-developer-api-paid.nitinshab43.workers.dev/api', 'pincode', 'pincode', 'JAANI'),
-        ('ff', 'https://nitin-developer-api-paid.nitinshab43.workers.dev/api', 'ff', 'uid', 'JAANI'),
+        
+        # FREE APIs for remaining features
+        ('instagram', 'https://instagram-api.vercel.app/api', 'user', 'username', 'free'),
+        ('ifsc', 'https://ifsc-api.vercel.app/api', 'ifsc', 'code', 'free'),
+        ('vehicle', 'https://vehicle-api.vercel.app/api', 'rc', 'number', 'free'),
+        ('gst', 'https://gst-api.vercel.app/api', 'gst', 'number', 'free'),
+        ('pan', 'https://pan-api.vercel.app/api', 'pan', 'number', 'free'),
+        ('pak_num', 'https://pak-api.vercel.app/api', 'pak', 'number', 'free'),
+        ('pincode', 'https://pincode-api.vercel.app/api', 'pincode', 'code', 'free'),
+        ('ff', 'https://ff-api.vercel.app/api', 'ff', 'uid', 'free'),
     ]
     
     for feature, base_url, action, query, key in default_configs:
@@ -375,7 +375,6 @@ def init_db():
         ''', (feature, base_url, action, query, key))
     conn.commit()
     
-    # Add owner as admin
     try:
         c.execute("INSERT OR IGNORE INTO admins (user_id, added_by, added_date, is_owner) VALUES (?, ?, ?, ?)",
                   (OWNER_ID, OWNER_ID, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 1))
@@ -383,7 +382,6 @@ def init_db():
     except Exception:
         pass
     
-    # Add owner as user
     try:
         c.execute("INSERT OR IGNORE INTO users (user_id, username, first_name, join_date, credits, last_active) VALUES (?, ?, ?, ?, ?, ?)",
                   (OWNER_ID, 'owner', 'Bot Owner', datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 0, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
@@ -393,10 +391,9 @@ def init_db():
     
     print("✅ Database initialized successfully!")
 
-# ==================== DYNAMIC API CONFIG FUNCTIONS ====================
+# ==================== API CONFIG FUNCTIONS ====================
 
 def get_api_config(feature):
-    """Get API config for a specific feature"""
     try:
         conn = sqlite3.connect('bot.db', timeout=10)
         c = conn.cursor()
@@ -422,7 +419,6 @@ def get_api_config(feature):
         return None
 
 def update_api_config(feature, base_url=None, action_param=None, query_param=None, api_key=None, timeout=None, enabled=None):
-    """Update API config for a feature"""
     try:
         conn = sqlite3.connect('bot.db', timeout=10)
         c = conn.cursor()
@@ -465,7 +461,6 @@ def update_api_config(feature, base_url=None, action_param=None, query_param=Non
         return False
 
 def get_all_api_configs():
-    """Get all API configs for admin panel"""
     try:
         conn = sqlite3.connect('bot.db', timeout=10)
         c = conn.cursor()
@@ -494,7 +489,6 @@ def get_all_api_configs():
         return []
 
 def call_dynamic_api(feature, query_value):
-    """UNIVERSAL API CALLER — Uses dynamic config from database"""
     import urllib.parse
     
     config = get_api_config(feature)
@@ -507,7 +501,7 @@ def call_dynamic_api(feature, query_value):
     encoded_value = urllib.parse.quote(str(query_value))
     url = f"{config['base_url']}?action={config['action_param']}&{config['query_param']}={encoded_value}&key={config['api_key']}"
     
-    print(f"[API:{feature}] {url}")
+    print(f"[API:{feature}] Calling: {url}")
     
     try:
         resp = requests.get(url, timeout=config['timeout'], headers={'User-Agent': 'Mozilla/5.0'})
@@ -576,7 +570,6 @@ def get_ff_info(uid):
     return call_dynamic_api('ff', uid)
 
 def get_email_info(email):
-    """Email info — uses generic API"""
     return call_dynamic_api('email', email)
 
 # ==================== FORMAT FUNCTIONS ====================
@@ -768,6 +761,14 @@ def format_generic_result(data, title, query_label, query_value):
     now = datetime.now(IST).strftime("%d %b %Y %I:%M %p")
     
     records = data.get('data', [])
+    if not records:
+        return format_message(
+            f"📋 <b>{title}</b>\n{_DIV()}\n"
+            f"🕐 {now}\n"
+            f"├🔎 {query_label}: <code>{query_value}</code>\n"
+            f"└❌ ɴᴏ ʀᴇᴄᴏʀᴅꜱ ꜰᴏᴜɴᴅ\n{_DIV()}"
+        )
+    
     lines = [
         f"📋 <b>{title}</b>",
         f"{_DIV()}",
@@ -905,27 +906,6 @@ def get_referral_count(user_id):
     conn.close()
     return result
 
-def get_money(user_id):
-    conn = sqlite3.connect('bot.db', timeout=5)
-    c = conn.cursor()
-    try:
-        c.execute("SELECT money FROM users WHERE user_id=?", (user_id,))
-        r = c.fetchone()
-        return r[0] if r else 0
-    except Exception:
-        return 0
-    finally:
-        conn.close()
-
-def add_money(user_id, amount):
-    conn = sqlite3.connect('bot.db', timeout=5)
-    c = conn.cursor()
-    try:
-        c.execute("UPDATE users SET money = money + ? WHERE user_id = ?", (amount, user_id))
-        conn.commit()
-    finally:
-        conn.close()
-
 def claim_daily(user_id):
     conn = sqlite3.connect('bot.db', timeout=5)
     c = conn.cursor()
@@ -978,12 +958,11 @@ def _is_main_admin_only(uid):
     return uid == OWNER_ID
 
 def is_feature_maintenance(feature_key):
-    return False, ''  # Disabled for simplicity
+    return False, ''
 
 # ==================== GITHUB BACKUP ====================
 
 def github_upload_db():
-    """Upload bot.db to GitHub"""
     if not GITHUB_TOKEN or not GITHUB_REPO:
         return False
     
@@ -1006,7 +985,6 @@ def github_upload_db():
         repo_clean = GITHUB_REPO.replace('https://github.com/', '').replace('github.com/', '').strip('/')
         url = f"https://api.github.com/repos/{repo_clean}/contents/{GITHUB_DB_PATH}"
         
-        # Get existing file SHA
         r = requests.get(url, headers=headers, timeout=10)
         sha = r.json().get('sha') if r.status_code == 200 else None
         
@@ -1114,7 +1092,7 @@ def start_cmd(message):
     if not get_user(uid):
         add_user(uid, uname, fname, ref)
     
-    text = f"👋 <b>Welcome</b> <code>{_esc(fname)}</code>!\n💰 <b>Credits:</b> <code>{get_credits(uid)}</code>"
+    text = f"👋 <b>Welcome</b> <code>{_esc(fname)}</code>!\n💰 <b>Credits:</b> <code>{get_credits(uid)}</code>\n🤖 <b>Made by:</b> @Guptaji_302"
     bot.send_message(uid, format_message(text), reply_markup=main_keyboard(uid))
 
 @bot.message_handler(func=lambda m: m.text == "🔙 ᴍᴀɪɴ ᴍᴇɴᴜ" and not is_group(m))
@@ -1522,7 +1500,167 @@ def ff_btn(m):
     user_state[uid] = "waiting_ff"
     bot.reply_to(m, format_message("<b>🎮 Send Free Fire UID:</b>\nExample: <code>1234567890</code>"), parse_mode='HTML')
 
+@bot.message_handler(func=lambda m: m.text == "👤 ꜱᴇʟᴇᴄᴛ ᴜꜱᴇʀ" and not is_group(m))
+def select_user_btn(m):
+    uid = m.from_user.id
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("👤 Select User", callback_data="select_user"))
+    bot.reply_to(m, format_message("<b>👤 Click button below to select a user:</b>"), reply_markup=markup, parse_mode='HTML')
+
+@bot.callback_query_handler(func=lambda call: call.data == "select_user")
+def select_user_callback(call):
+    uid = call.from_user.id
+    try:
+        markup = ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add(KeyboardButton("👤 Select User", request_users=KeyboardButtonRequestUser(request_id=1, user_is_bot=False)))
+        markup.add(KeyboardButton("🔙 Main Menu"))
+        bot.send_message(uid, format_message("<b>👤 Click 'Select User' button:</b>"), reply_markup=markup, parse_mode='HTML')
+        bot.answer_callback_query(call.id)
+    except Exception:
+        bot.send_message(uid, format_message("<b>❌ Select User feature needs update. Use /userid command instead.</b>"), parse_mode='HTML')
+        bot.answer_callback_query(call.id)
+
+@bot.message_handler(content_types=['users_shared'])
+def handle_user_shared(message):
+    uid = message.from_user.id
+    if not message.users_shared or not message.users_shared.user_ids:
+        return
+    
+    raw_user_id = message.users_shared.user_ids[0]
+    status = bot.reply_to(message, format_message("<b>⏳ Searching...</b>"), parse_mode='HTML')
+    
+    try:
+        # Get basic info from Telegram API
+        chat = bot.get_chat(raw_user_id)
+        result = {
+            'success': True,
+            'data': [{
+                'user_id': chat.id,
+                'username': chat.username or '',
+                'first_name': chat.first_name or '',
+                'last_name': chat.last_name or '',
+                'bio': getattr(chat, 'bio', '') or ''
+            }]
+        }
+        formatted = format_generic_result(result, "👤 𝗦𝗘𝗟𝗘𝗖𝗧𝗘𝗗 𝗨𝗦𝗘𝗥", "🆔 ID", raw_user_id)
+        bot.edit_message_text(formatted, message.chat.id, status.message_id, parse_mode='HTML')
+        save_search_history(uid, 'selected_userid', str(raw_user_id), result)
+    except Exception as e:
+        bot.edit_message_text(format_message(f"<b>❌ Error: {e}</b>"), message.chat.id, status.message_id, parse_mode='HTML')
+
+@bot.message_handler(func=lambda m: m.text == "🔍 ᴜꜱᴇʀɴᴀᴍᴇ ɪɴꜰᴏ" and not is_group(m))
+def username_btn(m):
+    uid = m.from_user.id
+    user_state[uid] = "waiting_username"
+    bot.reply_to(m, format_message("<b>🔍 Send username with @:</b>\nExample: <code>@username</code>"), parse_mode='HTML')
+
+@bot.message_handler(func=lambda m: m.text == "🆔 ᴛɢ ɪᴅ ɪɴꜰᴏ" and not is_group(m))
+def userid_btn(m):
+    uid = m.from_user.id
+    user_state[uid] = "waiting_userid"
+    bot.reply_to(m, format_message("<b>🆔 Send Telegram User ID:</b>\nExample: <code>6443754454</code>"), parse_mode='HTML')
+
+@bot.message_handler(func=lambda m: m.text == "💰 ʙᴀʟᴀɴᴄᴇ" and not is_group(m))
+def balance_btn(m):
+    uid = m.from_user.id
+    credits = get_credits(uid)
+    refs = get_referral_count(uid)
+    money = get_money(uid)
+    text = f"""
+<b>💰 ʙᴀʟᴀɴᴄᴇ</b>
+<b>₹ ᴍᴏɴᴇʏ:</b> <code>₹{money}</code>
+<b>💎 ᴄʀᴇᴅɪᴛꜱ:</b> <code>{credits}</code>
+<b>👥 ʀᴇꜰᴇʀʀᴀʟꜱ:</b> <code>{refs}</code>
+"""
+    bot.reply_to(m, format_message(text), parse_mode='HTML')
+
+@bot.message_handler(func=lambda m: m.text == "🎁 ᴅᴀɪʟʏ ᴄʟᴀɪᴍ" and not is_group(m))
+def daily_btn(m):
+    uid = m.from_user.id
+    if claim_daily(uid):
+        credits = get_credits(uid)
+        bot.reply_to(m, format_message(f"<b>✅ +{DAILY_CREDITS} credits!</b>\n💰 Total: <code>{credits}</code>"), parse_mode='HTML')
+    else:
+        bot.reply_to(m, format_message("<b>❌ Already claimed today!</b>\n⏳ Come back tomorrow."), parse_mode='HTML')
+
+@bot.message_handler(func=lambda m: m.text == "👥 ʀᴇꜰᴇʀʀᴀʟꜱ" and not is_group(m))
+def referral_btn(m):
+    uid = m.from_user.id
+    count = get_referral_count(uid)
+    link = f"https://t.me/{bot.get_me().username}?start={uid}"
+    credits = get_credits(uid)
+    
+    text = f"""
+<b>👥 ʀᴇꜰᴇʀʀᴀʟꜱ</b>
+<b>📊 Total:</b> <code>{count}</code>
+<b>🔗 Your Link:</b>
+<code>{link}</code>
+<b>🎁 Per Referral:</b> <code>+{REFERRAL_CREDITS}</code> credits
+<b>💰 Your Credits:</b> <code>{credits}</code>
+"""
+    bot.reply_to(m, format_message(text), parse_mode='HTML')
+
+@bot.message_handler(func=lambda m: m.text == "🎫 ʀᴇᴅᴇᴇᴍ ᴄᴏᴅᴇ" and not is_group(m))
+def redeem_btn(m):
+    uid = m.from_user.id
+    user_state[uid] = "waiting_redeem"
+    bot.reply_to(m, format_message("<b>🎫 Send redeem code:</b>\nExample: <code>OSINT-ABCD</code>"), parse_mode='HTML')
+
+@bot.message_handler(func=lambda m: m.text == "💎 ᴩʀᴇᴍɪᴜᴍ" and not is_group(m))
+def premium_btn(m):
+    uid = m.from_user.id
+    user = get_user(uid)
+    is_prem = False
+    if user and user[7] == 1 and user[8]:
+        try:
+            until = datetime.strptime(user[8], "%Y-%m-%d %H:%M:%S")
+            if until > datetime.now():
+                is_prem = True
+        except Exception:
+            pass
+    
+    if is_prem:
+        text = f"<b>💎 Premium Active!</b>\n⏳ Expires: <code>{user[8][:10]}</code>"
+    else:
+        text = """
+<b>💎 ᴩʀᴇᴍɪᴜᴍ</b>
+━━━━━━━━━━━━━━━━━━
+✨ Unlimited Searches
+✨ No Credit Cost
+✨ All Features Unlocked
+
+💳 Contact: @Guptaji_302
+"""
+    bot.reply_to(m, format_message(text), parse_mode='HTML')
+
+@bot.message_handler(func=lambda m: m.text == "ℹ️ ʜᴇʟᴩ" and not is_group(m))
+def help_btn(m):
+    text = """
+<b>ℹ️ ʜᴇʟᴩ & ɢᴜɪᴅᴇ</b>
+━━━━━━━━━━━━━━━━━━
+📱 Number Info — Mobile owner, operator
+🆔 Aadhar Info — 12-digit Aadhar details
+💳 UPI Info — UPI ID details
+📷 Instagram Info — Username info
+🏦 IFSC Info — Bank branch details
+🚗 Vehicle Info — RC number details
+💼 GST Info — GST number details
+🪪 PAN Info — PAN card details
+🇵🇰 Pak Num Info — Pakistan number
+📍 Pincode Info — 6-digit pincode
+🎮 Free Fire Info — FF UID details
+
+💰 Credits: Daily claim + Referrals
+💎 Premium: Unlimited access
+
+👑 Made by: @Guptaji_302
+"""
+    bot.reply_to(m, format_message(text), parse_mode='HTML')
+
 # ==================== TEXT INPUT HANDLER ====================
+
+def is_group(message):
+    return message.chat.type in ['group', 'supergroup']
 
 @bot.message_handler(func=lambda m: m.from_user and m.from_user.id in user_state and not is_group(m))
 def handle_text_input(m):
@@ -1533,15 +1671,7 @@ def handle_text_input(m):
     if not text:
         return
     
-    # Check credits for non-admin users
-    if uid != OWNER_ID:
-        credits = get_credits(uid)
-        if isinstance(credits, int) and credits <= 0:
-            bot.reply_to(m, format_message("<b>❌ No credits!</b>\n🎁 Claim daily or use redeem code!"), parse_mode='HTML')
-            return
-    
     if state == "waiting_number":
-        # Clean number
         clean = re.sub(r'[^\d]', '', text)
         if len(clean) < 10:
             bot.reply_to(m, format_message("<b>❌ Invalid number! Send 10-digit number.</b>"), parse_mode='HTML')
@@ -1771,13 +1901,98 @@ def handle_text_input(m):
             msg = result.get('msg', 'No data found')
             bot.edit_message_text(format_message(f"<b>❌ {msg}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
     
+    elif state == "waiting_username":
+        if not text.startswith('@'):
+            text = '@' + text
+        if len(text) < 2:
+            bot.reply_to(m, format_message("<b>❌ Invalid username!</b>"), parse_mode='HTML')
+            return
+        
+        status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
+        try:
+            chat = bot.get_chat(text)
+            result = {
+                'success': True,
+                'data': [{
+                    'user_id': chat.id,
+                    'username': chat.username or '',
+                    'first_name': chat.first_name or '',
+                    'last_name': chat.last_name or '',
+                    'bio': getattr(chat, 'bio', '') or ''
+                }]
+            }
+            formatted = format_generic_result(result, "🔍 𝗨𝗦𝗘𝗥𝗡𝗔𝗠𝗘 𝗜𝗡𝗙𝗢", "👤 Username", text)
+            user_state.pop(uid, None)
+            try:
+                bot.edit_message_text(formatted, m.chat.id, status.message_id, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            save_search_history(uid, 'username', text, result)
+        except Exception as e:
+            bot.edit_message_text(format_message(f"<b>❌ User not found: {e}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
+            user_state.pop(uid, None)
+    
+    elif state == "waiting_userid":
+        if not re.match(r'^\d+$', text):
+            bot.reply_to(m, format_message("<b>❌ Invalid User ID! Must be numeric.</b>"), parse_mode='HTML')
+            return
+        
+        status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
+        try:
+            chat = bot.get_chat(int(text))
+            result = {
+                'success': True,
+                'data': [{
+                    'user_id': chat.id,
+                    'username': chat.username or '',
+                    'first_name': chat.first_name or '',
+                    'last_name': chat.last_name or '',
+                    'bio': getattr(chat, 'bio', '') or ''
+                }]
+            }
+            formatted = format_generic_result(result, "🆔 𝗧𝗚 𝗜𝗗 𝗜𝗡𝗙𝗢", "🆔 ID", text)
+            user_state.pop(uid, None)
+            try:
+                bot.edit_message_text(formatted, m.chat.id, status.message_id, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            save_search_history(uid, 'userid', text, result)
+        except Exception as e:
+            bot.edit_message_text(format_message(f"<b>❌ User not found: {e}</b>"), m.chat.id, status.message_id, parse_mode='HTML')
+            user_state.pop(uid, None)
+    
+    elif state == "waiting_redeem":
+        # Simple redeem handler
+        code = text.upper().strip()
+        # Check if code exists in DB
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        try:
+            c.execute("SELECT credits, max_uses, used_count, expires_at FROM redeem_codes WHERE code = ? AND is_active = 1", (code,))
+            row = c.fetchone()
+            if row:
+                credits, max_uses, used_count, expires_at = row
+                if used_count >= max_uses:
+                    bot.reply_to(m, format_message("<b>❌ Code already fully used!</b>"), parse_mode='HTML')
+                elif expires_at and datetime.now() > datetime.strptime(expires_at, "%Y-%m-%d %H:%M:%S"):
+                    bot.reply_to(m, format_message("<b>❌ Code expired!</b>"), parse_mode='HTML')
+                else:
+                    c.execute("UPDATE redeem_codes SET used_count = used_count + 1 WHERE code = ?", (code,))
+                    c.execute("INSERT OR IGNORE INTO redeemed_users (user_id, code, redeemed_at) VALUES (?, ?, ?)",
+                              (uid, code, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                    add_credits(uid, credits)
+                    conn.commit()
+                    bot.reply_to(m, format_message(f"<b>✅ Code redeemed! +{credits} credits</b>\n💰 Total: <code>{get_credits(uid)}</code>"), parse_mode='HTML')
+            else:
+                bot.reply_to(m, format_message("<b>❌ Invalid code!</b>"), parse_mode='HTML')
+        except Exception as e:
+            bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+        finally:
+            conn.close()
+            user_state.pop(uid, None)
+    
     else:
         user_state.pop(uid, None)
-
-# ==================== HELPER FUNCTIONS ====================
-
-def is_group(message):
-    return message.chat.type in ['group', 'supergroup']
 
 # ==================== MAIN ====================
 
@@ -1786,10 +2001,8 @@ def main():
     print("🔥 OSINT BOT STARTING...")
     print("=" * 60)
     
-    # Initialize database
     init_db()
     
-    # Start Flask web server
     web_thread = threading.Thread(target=run_web, daemon=True, name="flask")
     web_thread.start()
     time.sleep(1)
@@ -1797,10 +2010,9 @@ def main():
     
     print(f"✅ Bot Token: {BOT_TOKEN[:10]}...")
     print(f"✅ Owner ID: {OWNER_ID}")
-    print(f"✅ GitHub Backup: {'Enabled' if GITHUB_TOKEN else 'Disabled'}")
+    print(f"✅ Made by: @Guptaji_302")
     print("=" * 60)
     
-    # Start polling
     try:
         bot.infinity_polling(timeout=30, long_polling_timeout=30)
     except Exception as e:
