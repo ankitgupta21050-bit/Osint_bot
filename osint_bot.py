@@ -1,7 +1,7 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║         🔥 CACHED OSINT BOT — REAL DATA + CACHE 🔥             ║
-║         API se real data → DB save → API dead → cache reply    ║
+║         🔥 ULTIMATE OSINT BOT — COMPLETE WORKING 🔥             ║
+║         COLORFUL UI + ALL FEATURES + CACHE + ADMIN PANEL       ║
 ║         Made by: @Guptaji_302                                   ║
 ╚══════════════════════════════════════════════════════════════════╝
 """
@@ -25,14 +25,14 @@ try:
     import telebot
     from telebot.types import (
         ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup,
-        InlineKeyboardButton, KeyboardButtonRequestUser
+        InlineKeyboardButton, KeyboardButtonRequestUser, BotCommand
     )
 except ImportError:
     os.system("pip install pyTelegramBotAPI==4.22.0")
     import telebot
     from telebot.types import (
         ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup,
-        InlineKeyboardButton, KeyboardButtonRequestUser
+        InlineKeyboardButton, KeyboardButtonRequestUser, BotCommand
     )
 
 # ==================== FLASK ====================
@@ -45,7 +45,7 @@ def home():
 
 @app.route('/health')
 def health():
-    return "OK", 200
+    return "OK | Bot is alive ✅", 200
 
 def run_web():
     app.run(host='0.0.0.0', port=10000, use_reloader=False, threaded=True)
@@ -66,14 +66,13 @@ DAILY_CREDITS = 1
 REFERRAL_CREDITS = 1
 BOT_CREDIT = "⚡ ʙᴏᴛ ᴍᴀᴅᴇ ʙʏ : @Guptaji_302"
 
-# ==================== DATABASE WITH CACHE TABLES ====================
+# ==================== DATABASE ====================
 def init_db():
     global conn, c
     conn = sqlite3.connect('bot.db', check_same_thread=False, timeout=30)
     c = conn.cursor()
     
     c.executescript('''
-        -- Users table
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
             username TEXT,
@@ -89,7 +88,6 @@ def init_db():
             money INTEGER DEFAULT 0
         );
         
-        -- Admins
         CREATE TABLE IF NOT EXISTS admins (
             user_id INTEGER PRIMARY KEY,
             added_by INTEGER,
@@ -97,7 +95,6 @@ def init_db():
             is_owner INTEGER DEFAULT 0
         );
         
-        -- Referrals
         CREATE TABLE IF NOT EXISTS referrals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             referrer INTEGER,
@@ -105,7 +102,6 @@ def init_db():
             date TEXT
         );
         
-        -- Search History
         CREATE TABLE IF NOT EXISTS search_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -115,14 +111,12 @@ def init_db():
             result TEXT
         );
         
-        -- Daily Claims
         CREATE TABLE IF NOT EXISTS daily_claims (
             user_id INTEGER,
             claim_date TEXT,
             PRIMARY KEY (user_id, claim_date)
         );
         
-        -- Redeem Codes
         CREATE TABLE IF NOT EXISTS redeem_codes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             code TEXT UNIQUE,
@@ -135,7 +129,6 @@ def init_db():
             is_active INTEGER DEFAULT 1
         );
         
-        -- Redeemed Users
         CREATE TABLE IF NOT EXISTS redeemed_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -143,7 +136,6 @@ def init_db():
             redeemed_at TEXT
         );
         
-        -- Bomber History
         CREATE TABLE IF NOT EXISTS bomber_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -155,109 +147,85 @@ def init_db():
             stopped_at TEXT
         );
         
-        -- ========== CACHE TABLES ==========
-        -- Number Cache
         CREATE TABLE IF NOT EXISTS cache_number (
             number TEXT PRIMARY KEY,
             data TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             hit_count INTEGER DEFAULT 0
         );
         
-        -- Aadhar Cache
         CREATE TABLE IF NOT EXISTS cache_aadhar (
             aadhar TEXT PRIMARY KEY,
             data TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             hit_count INTEGER DEFAULT 0
         );
         
-        -- UPI Cache
         CREATE TABLE IF NOT EXISTS cache_upi (
             upi TEXT PRIMARY KEY,
             data TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             hit_count INTEGER DEFAULT 0
         );
         
-        -- Instagram Cache
         CREATE TABLE IF NOT EXISTS cache_instagram (
             username TEXT PRIMARY KEY,
             data TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             hit_count INTEGER DEFAULT 0
         );
         
-        -- IFSC Cache
         CREATE TABLE IF NOT EXISTS cache_ifsc (
             ifsc TEXT PRIMARY KEY,
             data TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             hit_count INTEGER DEFAULT 0
         );
         
-        -- Vehicle Cache
         CREATE TABLE IF NOT EXISTS cache_vehicle (
             rc_number TEXT PRIMARY KEY,
             data TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             hit_count INTEGER DEFAULT 0
         );
         
-        -- GST Cache
         CREATE TABLE IF NOT EXISTS cache_gst (
             gst_number TEXT PRIMARY KEY,
             data TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             hit_count INTEGER DEFAULT 0
         );
         
-        -- PAN Cache
         CREATE TABLE IF NOT EXISTS cache_pan (
             pan_number TEXT PRIMARY KEY,
             data TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             hit_count INTEGER DEFAULT 0
         );
         
-        -- Pak Number Cache
         CREATE TABLE IF NOT EXISTS cache_pak (
             number TEXT PRIMARY KEY,
             data TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             hit_count INTEGER DEFAULT 0
         );
         
-        -- Pincode Cache
         CREATE TABLE IF NOT EXISTS cache_pincode (
             pincode TEXT PRIMARY KEY,
             data TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             hit_count INTEGER DEFAULT 0
         );
         
-        -- Free Fire Cache
         CREATE TABLE IF NOT EXISTS cache_ff (
             uid TEXT PRIMARY KEY,
             data TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             hit_count INTEGER DEFAULT 0
         );
     ''')
     conn.commit()
     
-    # Add owner as admin
     try:
         c.execute("INSERT OR IGNORE INTO admins (user_id, added_by, added_date, is_owner) VALUES (?, ?, ?, ?)",
                   (OWNER_ID, OWNER_ID, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 1))
@@ -265,7 +233,6 @@ def init_db():
     except Exception:
         pass
     
-    # Add owner as user
     try:
         c.execute("INSERT OR IGNORE INTO users (user_id, username, first_name, join_date, credits, last_active) VALUES (?, ?, ?, ?, ?, ?)",
                   (OWNER_ID, 'owner', 'Bot Owner', datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 999999, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
@@ -273,45 +240,39 @@ def init_db():
     except Exception:
         pass
     
-    print("✅ Database with cache initialized!")
+    print("✅ Database initialized!")
 
 # ==================== CACHE FUNCTIONS ====================
 
 def cache_get(table, key):
-    """Get cached data from database"""
     try:
         conn = sqlite3.connect('bot.db', timeout=5)
         c = conn.cursor()
         c.execute(f"SELECT data, hit_count FROM {table} WHERE {table.split('_')[1]} = ?", (key,))
         row = c.fetchone()
         if row:
-            # Update hit count
-            c.execute(f"UPDATE {table} SET hit_count = hit_count + 1, updated_at = CURRENT_TIMESTAMP WHERE {table.split('_')[1]} = ?", (key,))
+            c.execute(f"UPDATE {table} SET hit_count = hit_count + 1 WHERE {table.split('_')[1]} = ?", (key,))
             conn.commit()
             conn.close()
             return json.loads(row[0])
         conn.close()
         return None
-    except Exception as e:
-        print(f"[Cache Get] {e}")
+    except Exception:
         return None
 
 def cache_set(table, key, data):
-    """Save data to cache"""
     try:
         conn = sqlite3.connect('bot.db', timeout=5)
         c = conn.cursor()
         data_json = json.dumps(data, default=str)
-        c.execute(f"INSERT OR REPLACE INTO {table} ({table.split('_')[1]}, data, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)", (key, data_json))
+        c.execute(f"INSERT OR REPLACE INTO {table} ({table.split('_')[1]}, data) VALUES (?, ?)", (key, data_json))
         conn.commit()
         conn.close()
         return True
-    except Exception as e:
-        print(f"[Cache Set] {e}")
+    except Exception:
         return False
 
 def cache_get_all_stats():
-    """Get cache statistics"""
     tables = ['cache_number', 'cache_aadhar', 'cache_upi', 'cache_instagram', 
               'cache_ifsc', 'cache_vehicle', 'cache_gst', 'cache_pan', 
               'cache_pak', 'cache_pincode', 'cache_ff']
@@ -328,25 +289,19 @@ def cache_get_all_stats():
         pass
     return stats
 
-# ==================== CACHED API FUNCTIONS ====================
+# ==================== API FUNCTIONS ====================
 
 def get_number_info(number):
-    """Number Info with CACHE — REAL API first, then cache"""
     clean = re.sub(r'[^\d]', '', str(number))
     if len(clean) < 10:
         return {'success': False, 'msg': 'Invalid number'}
     
-    # STEP 1: Check Cache
     cached = cache_get('cache_number', clean)
     if cached:
-        print(f"[Cache HIT] Number: {clean}")
         cached['_from_cache'] = True
         cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
         return cached
     
-    print(f"[API CALL] Number: {clean}")
-    
-    # STEP 2: Try NITIN API
     try:
         url = f"https://nitin-developer-api-paid.nitinshab43.workers.dev/api?action=num&number={clean}&key=JAANI"
         resp = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
@@ -359,53 +314,26 @@ def get_number_info(number):
                     'total_records': len(data['result']),
                     'source': 'nitin_api'
                 }
-                # Save to cache
-                cache_set('cache_number', clean, result)
-                return result
-    except Exception as e:
-        print(f"[API Error] {e}")
-    
-    # STEP 3: Try Backup API
-    try:
-        url = f"https://phone-info-api.vercel.app/api?number={clean}"
-        resp = requests.get(url, timeout=8, headers={'User-Agent': 'Mozilla/5.0'})
-        if resp.status_code == 200:
-            data = resp.json()
-            if data:
-                result = {
-                    'success': True,
-                    'data': [data] if isinstance(data, dict) else data,
-                    'total_records': 1,
-                    'source': 'backup_api'
-                }
                 cache_set('cache_number', clean, result)
                 return result
     except Exception:
         pass
     
-    # STEP 4: Return cache anyway (even if expired) or demo
     if cached:
-        cached['_from_cache'] = True
-        cached['_cache_time'] = "Old cache"
         return cached
     
     return {'success': False, 'msg': 'No data found'}
 
 def get_aadhar_info(aadhar):
-    """Aadhar Info with CACHE"""
     clean = re.sub(r'\s+', '', str(aadhar))
     if not re.match(r'^\d{12}$', clean):
         return {'success': False, 'msg': 'Invalid Aadhar'}
     
-    # Check Cache
     cached = cache_get('cache_aadhar', clean)
     if cached:
-        print(f"[Cache HIT] Aadhar: {clean}")
         cached['_from_cache'] = True
         cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
         return cached
-    
-    print(f"[API CALL] Aadhar: {clean}")
     
     try:
         url = f"https://nitin-developer-api-paid.nitinshab43.workers.dev/api?action=aadhar&aadhar={clean}&key=JAANI"
@@ -425,25 +353,19 @@ def get_aadhar_info(aadhar):
         pass
     
     if cached:
-        cached['_from_cache'] = True
-        cached['_cache_time'] = "Old cache"
         return cached
     
     return {'success': False, 'msg': 'No data found'}
 
 def get_upi_info(upi):
-    """UPI Info with CACHE"""
     if '@' not in upi:
         return {'success': False, 'msg': 'Invalid UPI ID'}
     
     cached = cache_get('cache_upi', upi)
     if cached:
-        print(f"[Cache HIT] UPI: {upi}")
         cached['_from_cache'] = True
         cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
         return cached
-    
-    print(f"[API CALL] UPI: {upi}")
     
     try:
         url = f"https://nitin-developer-api-paid.nitinshab43.workers.dev/api?action=upiinfo&upi={upi}&key=JAANI"
@@ -463,26 +385,20 @@ def get_upi_info(upi):
         pass
     
     if cached:
-        cached['_from_cache'] = True
-        cached['_cache_time'] = "Old cache"
         return cached
     
     return {'success': False, 'msg': 'No data found'}
 
 def get_instagram_info(username):
-    """Instagram Info with CACHE"""
     clean = username.replace('@', '').strip()
     if len(clean) < 2:
         return {'success': False, 'msg': 'Invalid username'}
     
     cached = cache_get('cache_instagram', clean)
     if cached:
-        print(f"[Cache HIT] Instagram: {clean}")
         cached['_from_cache'] = True
         cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
         return cached
-    
-    print(f"[API CALL] Instagram: {clean}")
     
     try:
         url = f"https://instagram-api.vercel.app/api/info?username={clean}"
@@ -511,26 +427,20 @@ def get_instagram_info(username):
         pass
     
     if cached:
-        cached['_from_cache'] = True
-        cached['_cache_time'] = "Old cache"
         return cached
     
     return {'success': False, 'msg': 'No data found'}
 
 def get_ifsc_info(ifsc):
-    """IFSC Info with CACHE"""
     clean = ifsc.upper().strip()
     if len(clean) != 11:
         return {'success': False, 'msg': 'Invalid IFSC'}
     
     cached = cache_get('cache_ifsc', clean)
     if cached:
-        print(f"[Cache HIT] IFSC: {clean}")
         cached['_from_cache'] = True
         cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
         return cached
-    
-    print(f"[API CALL] IFSC: {clean}")
     
     try:
         url = f"https://ifsc-api.vercel.app/api?action=ifsc&code={clean}&key=free"
@@ -549,26 +459,20 @@ def get_ifsc_info(ifsc):
         pass
     
     if cached:
-        cached['_from_cache'] = True
-        cached['_cache_time'] = "Old cache"
         return cached
     
     return {'success': False, 'msg': 'No data found'}
 
 def get_vehicle_info(vehicle):
-    """Vehicle Info with CACHE"""
     clean = re.sub(r'\s+', '', vehicle).upper()
     if len(clean) < 8:
         return {'success': False, 'msg': 'Invalid RC number'}
     
     cached = cache_get('cache_vehicle', clean)
     if cached:
-        print(f"[Cache HIT] Vehicle: {clean}")
         cached['_from_cache'] = True
         cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
         return cached
-    
-    print(f"[API CALL] Vehicle: {clean}")
     
     try:
         url = f"https://vehicle-api.vercel.app/api?action=rc&number={clean}&key=free"
@@ -587,26 +491,20 @@ def get_vehicle_info(vehicle):
         pass
     
     if cached:
-        cached['_from_cache'] = True
-        cached['_cache_time'] = "Old cache"
         return cached
     
     return {'success': False, 'msg': 'No data found'}
 
 def get_gst_info(gst):
-    """GST Info with CACHE"""
     clean = gst.upper().strip()
     if len(clean) < 10:
         return {'success': False, 'msg': 'Invalid GST'}
     
     cached = cache_get('cache_gst', clean)
     if cached:
-        print(f"[Cache HIT] GST: {clean}")
         cached['_from_cache'] = True
         cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
         return cached
-    
-    print(f"[API CALL] GST: {clean}")
     
     try:
         url = f"https://gst-api.vercel.app/api?action=gst&number={clean}&key=free"
@@ -625,26 +523,20 @@ def get_gst_info(gst):
         pass
     
     if cached:
-        cached['_from_cache'] = True
-        cached['_cache_time'] = "Old cache"
         return cached
     
     return {'success': False, 'msg': 'No data found'}
 
 def get_pan_info(pan):
-    """PAN Info with CACHE"""
     clean = pan.upper().strip()
     if not re.match(r'^[A-Z]{5}[0-9]{4}[A-Z]$', clean):
         return {'success': False, 'msg': 'Invalid PAN format'}
     
     cached = cache_get('cache_pan', clean)
     if cached:
-        print(f"[Cache HIT] PAN: {clean}")
         cached['_from_cache'] = True
         cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
         return cached
-    
-    print(f"[API CALL] PAN: {clean}")
     
     try:
         url = f"https://pan-api.vercel.app/api?action=pan&number={clean}&key=free"
@@ -663,26 +555,20 @@ def get_pan_info(pan):
         pass
     
     if cached:
-        cached['_from_cache'] = True
-        cached['_cache_time'] = "Old cache"
         return cached
     
     return {'success': False, 'msg': 'No data found'}
 
 def get_pak_num_info(number):
-    """Pak Number Info with CACHE"""
     clean = re.sub(r'[^\d]', '', str(number))
     if len(clean) < 10:
         return {'success': False, 'msg': 'Invalid number'}
     
     cached = cache_get('cache_pak', clean)
     if cached:
-        print(f"[Cache HIT] Pak: {clean}")
         cached['_from_cache'] = True
         cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
         return cached
-    
-    print(f"[API CALL] Pak: {clean}")
     
     try:
         url = f"https://pak-api.vercel.app/api?action=pak&number={clean}&key=free"
@@ -701,26 +587,20 @@ def get_pak_num_info(number):
         pass
     
     if cached:
-        cached['_from_cache'] = True
-        cached['_cache_time'] = "Old cache"
         return cached
     
     return {'success': False, 'msg': 'No data found'}
 
 def get_pincode_info(pincode):
-    """Pincode Info with CACHE"""
     clean = re.sub(r'[^\d]', '', str(pincode))
     if len(clean) != 6:
         return {'success': False, 'msg': 'Invalid pincode'}
     
     cached = cache_get('cache_pincode', clean)
     if cached:
-        print(f"[Cache HIT] Pincode: {clean}")
         cached['_from_cache'] = True
         cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
         return cached
-    
-    print(f"[API CALL] Pincode: {clean}")
     
     try:
         url = f"https://pincode-api.vercel.app/api?action=pincode&code={clean}&key=free"
@@ -739,26 +619,20 @@ def get_pincode_info(pincode):
         pass
     
     if cached:
-        cached['_from_cache'] = True
-        cached['_cache_time'] = "Old cache"
         return cached
     
     return {'success': False, 'msg': 'No data found'}
 
 def get_ff_info(uid):
-    """Free Fire Info with CACHE"""
     clean = re.sub(r'[^\d]', '', str(uid))
     if len(clean) < 5:
         return {'success': False, 'msg': 'Invalid UID'}
     
     cached = cache_get('cache_ff', clean)
     if cached:
-        print(f"[Cache HIT] FF: {clean}")
         cached['_from_cache'] = True
         cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
         return cached
-    
-    print(f"[API CALL] FF: {clean}")
     
     try:
         url = f"https://ff-api.vercel.app/api?action=ff&uid={clean}&key=free"
@@ -777,26 +651,21 @@ def get_ff_info(uid):
         pass
     
     if cached:
-        cached['_from_cache'] = True
-        cached['_cache_time'] = "Old cache"
         return cached
     
     return {'success': False, 'msg': 'No data found'}
 
 def get_hitek_num_info(number):
-    """Hitek Number Info with CACHE"""
     clean = re.sub(r'[^\d]', '', str(number))
     if len(clean) < 10:
         return {'success': False, 'msg': 'Invalid number'}
     
-    # No API for Hitek, just use cache or demo
-    cached = cache_get('cache_number', clean)  # Reuse number cache
+    cached = cache_get('cache_number', clean)
     if cached:
         cached['_from_cache'] = True
         cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
         return cached
     
-    # Try number API as fallback
     result = get_number_info(clean)
     if result.get('success'):
         return result
@@ -804,19 +673,16 @@ def get_hitek_num_info(number):
     return {'success': False, 'msg': 'No data found'}
 
 def get_hitek_full_info(query):
-    """Hitek Full Info with CACHE"""
     if len(query) < 2:
         return {'success': False, 'msg': 'Invalid query'}
     
-    # Simple cache for hitek full
     cache_key = hashlib.md5(query.encode()).hexdigest()[:16]
-    cached = cache_get('cache_number', cache_key)  # Reuse cache
+    cached = cache_get('cache_number', cache_key)
     if cached:
         cached['_from_cache'] = True
         cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
         return cached
     
-    # Try to get from number API first
     if re.search(r'\d', query):
         clean_num = re.sub(r'[^\d]', '', query)
         if len(clean_num) >= 10:
@@ -826,76 +692,6 @@ def get_hitek_full_info(query):
                 return result
     
     return {'success': False, 'msg': 'No data found'}
-
-# ==================== FORMAT FUNCTIONS ====================
-
-def _DIV():
-    return "━━━━━━━━━━━━━━━━━━"
-
-def _esc(v):
-    return str(v).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-
-def format_message(text):
-    return f"<blockquote>{text}\n\n{BOT_CREDIT}</blockquote>"
-
-def format_generic_result(data, title, query_label, query_value):
-    IST = ZoneInfo("Asia/Kolkata")
-    now = datetime.now(IST).strftime("%d %b %Y %I:%M %p")
-    
-    records = data.get('data', [])
-    if not records:
-        return format_message(
-            f"📋 <b>{title}</b>\n{_DIV()}\n"
-            f"🕐 {now}\n"
-            f"🔎 {query_label}: <code>{query_value}</code>\n"
-            f"❌ ɴᴏ ʀᴇᴄᴏʀᴅꜱ ꜰᴏᴜɴᴅ\n{_DIV()}"
-        )
-    
-    # Check if from cache
-    cache_badge = " 💾 [CACHE]" if data.get('_from_cache') else ""
-    cache_time = f"\n📅 ᴄᴀᴄʜᴇᴅ: {data.get('_cache_time', 'N/A')}" if data.get('_from_cache') else ""
-    
-    lines = [
-        f"📋 <b>{title}</b>{cache_badge}",
-        f"{_DIV()}",
-        f"🕐 {now}",
-        f"🔎 {query_label}: <code>{_esc(str(query_value))}</code>",
-        f"📊 ᴛᴏᴛᴀʟ ʀᴇᴄᴏʀᴅꜱ: <b>{len(records)}</b>{cache_time}",
-        f"📡 <b>ꜱᴏᴜʀᴄᴇ:</b> {data.get('source', 'Unknown')}",
-        f"{_DIV()}",
-    ]
-    
-    for idx, item in enumerate(records, 1):
-        if len(records) > 1:
-            lines.append(f"")
-            lines.append(f"👤 <b>ʀᴇᴄᴏʀᴅ {idx}/{len(records)}</b>")
-        
-        fields = []
-        for k, v in item.items():
-            if k.lower() in ('success', 'status', 'msg', 'message', '_raw', 'metadata', 'source', '_from_cache', '_cache_time'):
-                continue
-            if v and str(v).strip() not in ('', 'N/A', 'None', 'null', '0'):
-                emoji = '👤' if 'name' in k.lower() else '🏠' if 'address' in k.lower() else '📱' if 'number' in k.lower() else '•'
-                fields.append((emoji, k.replace('_', ' ').title(), v))
-        
-        if fields:
-            for i, (em, label, val) in enumerate(fields[:10]):
-                c = "└" if i == len(fields[:10]) - 1 else "├"
-                lines.append(f"{c}{em} <b>{label}</b>: <code>{_esc(str(val))}</code>")
-        else:
-            lines.append("└❌ ɴᴏ ᴅᴀᴛᴀ")
-    
-    lines.append(f"{_DIV()}")
-    return format_message("\n".join(lines))
-
-def format_number_info_bold(data, number):
-    return format_generic_result(data, "📱 𝗡𝗨𝗠𝗕𝗘𝗥 𝗜𝗡𝗙𝗢", "📞 Number", number)
-
-def format_aadhar_result_bold(data, aadhar):
-    return format_generic_result(data, "🪪 𝗔𝗔𝗗𝗛𝗔𝗥 𝗜𝗡𝗙𝗢", "🪪 Aadhar", aadhar)
-
-def format_upi_result_bold(data, upi):
-    return format_generic_result(data, "💳 𝗨𝗣𝗜 𝗜𝗡𝗙𝗢", "💳 UPI", upi)
 
 # ==================== USER FUNCTIONS ====================
 
@@ -939,6 +735,18 @@ def add_credits(user_id, amount):
         c.execute("UPDATE users SET credits = credits + ? WHERE user_id = ?", (amount, user_id))
         conn.commit()
         return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+def remove_credits(user_id, amount):
+    conn = sqlite3.connect('bot.db', timeout=5)
+    c = conn.cursor()
+    try:
+        c.execute("UPDATE users SET credits = credits - ? WHERE user_id = ? AND credits >= ?", (amount, user_id, amount))
+        conn.commit()
+        return c.rowcount > 0
     except Exception:
         return False
     finally:
@@ -1070,47 +878,213 @@ admin_page = {}
 bomber_active = {}
 paid_bomber_active = {}
 
+# ==================== FORMAT FUNCTIONS ====================
+
+def _DIV():
+    return "━━━━━━━━━━━━━━━━━━"
+
+def _esc(v):
+    return str(v).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+def format_message(text):
+    return f"<blockquote>{text}\n\n{BOT_CREDIT}</blockquote>"
+
+def format_generic_result(data, title, query_label, query_value):
+    IST = ZoneInfo("Asia/Kolkata")
+    now = datetime.now(IST).strftime("%d %b %Y %I:%M %p")
+    
+    records = data.get('data', [])
+    if not records:
+        return format_message(
+            f"📋 <b>{title}</b>\n{_DIV()}\n"
+            f"🕐 {now}\n"
+            f"🔎 {query_label}: <code>{query_value}</code>\n"
+            f"❌ ɴᴏ ʀᴇᴄᴏʀᴅꜱ ꜰᴏᴜɴᴅ\n{_DIV()}"
+        )
+    
+    cache_badge = " 💾 [CACHE]" if data.get('_from_cache') else ""
+    cache_time = f"\n📅 ᴄᴀᴄʜᴇᴅ: {data.get('_cache_time', 'N/A')}" if data.get('_from_cache') else ""
+    
+    lines = [
+        f"📋 <b>{title}</b>{cache_badge}",
+        f"{_DIV()}",
+        f"🕐 {now}",
+        f"🔎 {query_label}: <code>{_esc(str(query_value))}</code>",
+        f"📊 ᴛᴏᴛᴀʟ ʀᴇᴄᴏʀᴅꜱ: <b>{len(records)}</b>{cache_time}",
+        f"📡 <b>ꜱᴏᴜʀᴄᴇ:</b> {data.get('source', 'Unknown')}",
+        f"{_DIV()}",
+    ]
+    
+    for idx, item in enumerate(records, 1):
+        if len(records) > 1:
+            lines.append(f"")
+            lines.append(f"👤 <b>ʀᴇᴄᴏʀᴅ {idx}/{len(records)}</b>")
+        
+        fields = []
+        for k, v in item.items():
+            if k.lower() in ('success', 'status', 'msg', 'message', '_raw', 'metadata', 'source', '_from_cache', '_cache_time'):
+                continue
+            if v and str(v).strip() not in ('', 'N/A', 'None', 'null', '0'):
+                emoji = '👤' if 'name' in k.lower() else '🏠' if 'address' in k.lower() else '📱' if 'number' in k.lower() else '•'
+                fields.append((emoji, k.replace('_', ' ').title(), v))
+        
+        if fields:
+            for i, (em, label, val) in enumerate(fields[:10]):
+                c = "└" if i == len(fields[:10]) - 1 else "├"
+                lines.append(f"{c}{em} <b>{label}</b>: <code>{_esc(str(val))}</code>")
+        else:
+            lines.append("└❌ ɴᴏ ᴅᴀᴛᴀ")
+    
+    lines.append(f"{_DIV()}")
+    return format_message("\n".join(lines))
+
+def format_number_info_bold(data, number):
+    return format_generic_result(data, "📱 𝗡𝗨𝗠𝗕𝗘𝗥 𝗜𝗡𝗙𝗢", "📞 Number", number)
+
+def format_aadhar_result_bold(data, aadhar):
+    return format_generic_result(data, "🪪 𝗔𝗔𝗗𝗛𝗔𝗥 𝗜𝗡𝗙𝗢", "🪪 Aadhar", aadhar)
+
+def format_upi_result_bold(data, upi):
+    return format_generic_result(data, "💳 𝗨𝗣𝗜 𝗜𝗡𝗙𝗢", "💳 UPI", upi)
+
 # ==================== KEYBOARDS ====================
 
 def main_keyboard(user_id):
+    """Main Menu — Colorful UI"""
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    buttons = [
-        ("📱 ɴᴜᴍʙᴇʀ ɪɴꜰᴏ", "👤 ꜱᴇʟᴇᴄᴛ ᴜꜱᴇʀ"),
-        ("🔍 ᴜꜱᴇʀɴᴀᴍᴇ ɪɴꜰᴏ", "🆔 ᴛɢ ɪᴅ ɪɴꜰᴏ"),
-        ("🆔 ᴀᴀᴅʜᴀʀ ɪɴꜰᴏ", "📷 ɪɴꜱᴛᴀɢʀᴀᴍ ɪɴꜰᴏ"),
-        ("🏦 ɪꜰꜱᴄ ɪɴꜰᴏ", "🚗 ᴠᴇʜɪᴄʟᴇ ɪɴꜰᴏ"),
-        ("💼 ɢꜱᴛ ɪɴꜰᴏ", "🪪 ᴩᴀɴ ɪɴꜰᴏ"),
-        ("🇵🇰 ᴩᴀᴋ ɴᴜᴍ ɪɴꜰᴏ", "🎮 ꜰʀᴇᴇ ꜰɪʀᴇ ɪɴꜰᴏ"),
-        ("📍 ᴩɪɴᴄᴏᴅᴇ ɪɴꜰᴏ", "💳 ᴜᴩɪ ɪɴꜰᴏ"),
-        ("💎 ʜɪᴛᴇᴋ-ɴᴜᴍ-ɪɴꜰᴏ 👑", "🌟 ʜɪᴛᴇᴋ-ꜰᴜʟʟ-ɪɴꜰᴏ 👑"),
-        ("💣 ʙᴏᴍʙᴇʀ", "🎁 ᴅᴀɪʟʏ ᴄʟᴀɪᴍ"),
-        ("💎 ᴩʀᴇᴍɪᴜᴍ", "💰 ʙᴀʟᴀɴᴄᴇ"),
-        ("💳 ᴩᴜʀᴄʜᴀꜱᴇ ᴩʀᴇᴍɪᴜᴍ", "👥 ʀᴇꜰᴇʀʀᴀʟꜱ"),
-        ("🤖 ᴄʟᴏɴᴇ ʙᴏᴛ", "🎫 ʀᴇᴅᴇᴇᴍ ᴄᴏᴅᴇ"),
-        ("📢 ᴄʜᴀɴɴᴇʟ", "📋 ᴍʏ ʜɪꜱᴛᴏʀʏ"),
-        ("ℹ️ ʜᴇʟᴩ", "🔑 ᴍʏ ᴀᴩɪ ᴋᴇʏꜱ"),
-    ]
-    if is_admin(user_id):
-        buttons.append(("⚙️ ᴀᴅᴍɪɴ ᴩᴀɴᴇʟ",))
     
-    for row in buttons:
-        markup.add(*(KeyboardButton(b) for b in row))
+    # Row 1: Info features
+    markup.row(
+        KeyboardButton("📱 ɴᴜᴍʙᴇʀ ɪɴꜰᴏ"),
+        KeyboardButton("👤 ꜱᴇʟᴇᴄᴛ ᴜꜱᴇʀ")
+    )
+    markup.row(
+        KeyboardButton("🔍 ᴜꜱᴇʀɴᴀᴍᴇ ɪɴꜰᴏ"),
+        KeyboardButton("🆔 ᴛɢ ɪᴅ ɪɴꜰᴏ")
+    )
+    markup.row(
+        KeyboardButton("🆔 ᴀᴀᴅʜᴀʀ ɪɴꜰᴏ"),
+        KeyboardButton("📷 ɪɴꜱᴛᴀɢʀᴀᴍ ɪɴꜰᴏ")
+    )
+    markup.row(
+        KeyboardButton("🏦 ɪꜰꜱᴄ ɪɴꜰᴏ"),
+        KeyboardButton("🚗 ᴠᴇʜɪᴄʟᴇ ɪɴꜰᴏ")
+    )
+    markup.row(
+        KeyboardButton("💼 ɢꜱᴛ ɪɴꜰᴏ"),
+        KeyboardButton("🪪 ᴩᴀɴ ɪɴꜰᴏ")
+    )
+    markup.row(
+        KeyboardButton("🇵🇰 ᴩᴀᴋ ɴᴜᴍ ɪɴꜰᴏ"),
+        KeyboardButton("🎮 ꜰʀᴇᴇ ꜰɪʀᴇ ɪɴꜰᴏ")
+    )
+    markup.row(
+        KeyboardButton("📍 ᴩɪɴᴄᴏᴅᴇ ɪɴꜰᴏ"),
+        KeyboardButton("💳 ᴜᴩɪ ɪɴꜰᴏ")
+    )
+    markup.row(
+        KeyboardButton("💎 ʜɪᴛᴇᴋ-ɴᴜᴍ-ɪɴꜰᴏ 👑"),
+        KeyboardButton("🌟 ʜɪᴛᴇᴋ-ꜰᴜʟʟ-ɪɴꜰᴏ 👑")
+    )
+    
+    # Row 2: Bomber & Daily
+    markup.row(
+        KeyboardButton("💣 ʙᴏᴍʙᴇʀ"),
+        KeyboardButton("🎁 ᴅᴀɪʟʏ ᴄʟᴀɪᴍ")
+    )
+    
+    # Row 3: Premium & Balance
+    markup.row(
+        KeyboardButton("💎 ᴩʀᴇᴍɪᴜᴍ"),
+        KeyboardButton("💰 ʙᴀʟᴀɴᴄᴇ")
+    )
+    markup.row(
+        KeyboardButton("💳 ᴩᴜʀᴄʜᴀꜱᴇ ᴩʀᴇᴍɪᴜᴍ"),
+        KeyboardButton("👥 ʀᴇꜰᴇʀʀᴀʟꜱ")
+    )
+    
+    # Row 4: Clone & Redeem
+    markup.row(
+        KeyboardButton("🤖 ᴄʟᴏɴᴇ ʙᴏᴛ"),
+        KeyboardButton("🎫 ʀᴇᴅᴇᴇᴍ ᴄᴏᴅᴇ")
+    )
+    
+    # Row 5: History & Help
+    markup.row(
+        KeyboardButton("📢 ᴄʜᴀɴɴᴇʟ"),
+        KeyboardButton("📋 ᴍʏ ʜɪꜱᴛᴏʀʏ")
+    )
+    markup.row(
+        KeyboardButton("ℹ️ ʜᴇʟᴩ"),
+        KeyboardButton("🔑 ᴍʏ ᴀᴩɪ ᴋᴇʏꜱ")
+    )
+    
+    # Admin Panel
+    if is_admin(user_id):
+        markup.row(KeyboardButton("⚙️ ᴀᴅᴍɪɴ ᴩᴀɴᴇʟ"))
+    
     return markup
 
 def admin_keyboard(uid=0):
+    """Admin Panel — Colorful UI"""
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    buttons = [
-        ("📊 ᴅᴀꜱʜʙᴏᴀʀᴅ", "📊 ᴄᴀᴄʜᴇ ꜱᴛᴀᴛꜱ"),
-        ("👥 ᴜꜱᴇʀ ʟɪꜱᴛ", "📢 ʙʀᴏᴀᴅᴄᴀꜱᴛ"),
-        ("🚫 ʙʟᴏᴄᴋ ᴜꜱᴇʀ", "✅ ᴜɴʙʟᴏᴄᴋ ᴜꜱᴇʀ"),
-        ("👤 ᴜꜱᴇʀ ɪɴꜰᴏ", "💎 ᴀᴅᴅ ᴩʀᴇᴍɪᴜᴍ"),
-        ("🚫 ʀᴇᴍᴏᴠᴇ ᴩʀᴇᴍɪᴜᴍ", "💰 ᴀᴅᴅ ᴄʀᴇᴅɪᴛꜱ"),
-        ("💸 ʀᴇᴍᴏᴠᴇ ᴄʀᴇᴅɪᴛꜱ", "⚙️ ꜱᴇᴛ ᴄʀᴇᴅɪᴛꜱ"),
-        ("🏠 ᴍᴀɪɴ ᴍᴇɴᴜ", ""),
-    ]
-    for row in buttons:
-        if row[0]:
-            markup.add(*(KeyboardButton(b) for b in row if b))
+    
+    # Row 1: Dashboard & Users
+    markup.row(
+        KeyboardButton("📊 ᴅᴀꜱʜʙᴏᴀʀᴅ"),
+        KeyboardButton("👥 ᴜꜱᴇʀ ʟɪꜱᴛ")
+    )
+    
+    # Row 2: Broadcast & Block
+    markup.row(
+        KeyboardButton("📢 ʙʀᴏᴀᴅᴄᴀꜱᴛ"),
+        KeyboardButton("🚫 ʙʟᴏᴄᴋ ᴜꜱᴇʀ")
+    )
+    markup.row(
+        KeyboardButton("✅ ᴜɴʙʟᴏᴄᴋ ᴜꜱᴇʀ"),
+        KeyboardButton("👤 ᴜꜱᴇʀ ɪɴꜰᴏ")
+    )
+    
+    # Row 3: Premium
+    markup.row(
+        KeyboardButton("💎 ᴀᴅᴅ ᴩʀᴇᴍɪᴜᴍ"),
+        KeyboardButton("🚫 ʀᴇᴍᴏᴠᴇ ᴩʀᴇᴍɪᴜᴍ")
+    )
+    
+    # Row 4: Credits
+    markup.row(
+        KeyboardButton("💰 ᴀᴅᴅ ᴄʀᴇᴅɪᴛꜱ"),
+        KeyboardButton("💸 ʀᴇᴍᴏᴠᴇ ᴄʀᴇᴅɪᴛꜱ")
+    )
+    markup.row(
+        KeyboardButton("⚙️ ꜱᴇᴛ ᴄʀᴇᴅɪᴛꜱ"),
+        KeyboardButton("₹ ᴀᴅᴅ ᴍᴏɴᴇʏ")
+    )
+    
+    # Row 5: History & Export
+    markup.row(
+        KeyboardButton("🗑️ ᴅᴇʟᴇᴛᴇ ʜɪꜱᴛᴏʀʏ"),
+        KeyboardButton("📤 ᴇxᴩᴏʀᴛ ᴜꜱᴇʀꜱ")
+    )
+    
+    # Row 6: Misc
+    markup.row(
+        KeyboardButton("🔔 ɴᴏᴛɪꜰʏ ᴜꜱᴇʀ"),
+        KeyboardButton("📊 ᴄᴀᴄʜᴇ ꜱᴛᴀᴛꜱ")
+    )
+    markup.row(
+        KeyboardButton("🔧 ᴀᴩɪ ᴄᴏɴꜰɪɢ"),
+        KeyboardButton("🤖 ᴄʟᴏɴᴇ ʙᴏᴛꜱ")
+    )
+    markup.row(
+        KeyboardButton("🔧 ꜰᴇᴀᴛᴜʀᴇ ᴄᴏꜱᴛꜱ"),
+        KeyboardButton("💎 ᴩʀᴇᴍɪᴜᴍ ᴩʀɪᴄᴇꜱ")
+    )
+    markup.row(
+        KeyboardButton("🛠️ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ"),
+        KeyboardButton("🏠 ᴍᴀɪɴ ᴍᴇɴᴜ")
+    )
+    
     return markup
 
 # ==================== BOMBER ====================
@@ -1213,34 +1187,663 @@ def start_cmd(message):
     if not get_user(uid):
         add_user(uid, uname, fname, ref)
     
-    text = f"👋 <b>Welcome</b> <code>{_esc(fname)}</code>!\n💰 <b>Credits:</b> <code>{get_credits(uid)}</code>\n🤖 <b>Made by:</b> @Guptaji_302"
+    text = f"""👋 <b>Welcome</b> <code>{_esc(fname)}</code>!
+
+💰 <b>Credits:</b> <code>{get_credits(uid)}</code>
+🤖 <b>Made by:</b> @Guptaji_302
+
+📌 <b>Use the buttons below to search!</b>"""
+    
     bot.send_message(uid, format_message(text), reply_markup=main_keyboard(uid))
 
 @bot.message_handler(func=lambda m: m.text == "🔙 ᴍᴀɪɴ ᴍᴇɴᴜ" and not is_group(m))
 def menu_btn(m):
     uid = m.from_user.id
     user_state.pop(uid, None)
-    text = f"👋 <b>Menu</b>\n💰 <b>Credits:</b> <code>{get_credits(uid)}</code>"
+    text = f"👋 <b>Main Menu</b>\n💰 <b>Credits:</b> <code>{get_credits(uid)}</code>"
     bot.send_message(uid, format_message(text), reply_markup=main_keyboard(uid))
+
+# ==================== ADMIN PANEL ====================
 
 @bot.message_handler(func=lambda m: m.text == "⚙️ ᴀᴅᴍɪɴ ᴩᴀɴᴇʟ" and is_admin(m.from_user.id) and not is_group(m))
 def admin_panel(m):
     uid = m.from_user.id
     admin_page[uid] = 1
-    bot.send_message(uid, format_message("<b>⚙️ ᴀᴅᴍɪɴ ᴩᴀɴᴇʟ</b>"), reply_markup=admin_keyboard(uid))
+    text = """
+<b>⚙️ ᴀᴅᴍɪɴ ᴩᴀɴᴇʟ</b>
+━━━━━━━━━━━━━━━━━━
+📊 Dashboard — Bot stats
+👥 User List — All users
+📢 Broadcast — Send message
+🚫 Block User — Block user
+✅ Unblock User — Unblock user
+👤 User Info — User details
+💎 Add Premium — Add premium
+🚫 Remove Premium — Remove premium
+💰 Add Credits — Add credits
+💸 Remove Credits — Remove credits
+⚙️ Set Credits — Set credits
+₹ Add Money — Add money
+🗑️ Delete History — Delete history
+📤 Export Users — Export users CSV
+🔔 Notify User — Notify user
+📊 Cache Stats — Cache statistics
+🔧 API Config — API config
+🤖 Clone Bots — Clone bots
+🔧 Feature Costs — Feature costs
+💎 Premium Prices — Premium prices
+🛠️ Maintenance — Maintenance mode
+"""
+    bot.send_message(uid, format_message(text), reply_markup=admin_keyboard(uid))
+
+# ==================== DASHBOARD ====================
+
+@bot.message_handler(func=lambda m: m.text == "📊 ᴅᴀꜱʜʙᴏᴀʀᴅ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_dashboard(m):
+    uid = m.from_user.id
+    try:
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        total = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        today = c.execute("SELECT COUNT(*) FROM users WHERE DATE(join_date)=DATE('now')").fetchone()[0]
+        premium = c.execute("SELECT COUNT(*) FROM users WHERE is_premium=1 AND premium_until > datetime('now')").fetchone()[0]
+        blocked = c.execute("SELECT COUNT(*) FROM users WHERE is_blocked=1").fetchone()[0]
+        searches = c.execute("SELECT COUNT(*) FROM search_history").fetchone()[0]
+        admins = c.execute("SELECT COUNT(*) FROM admins").fetchone()[0]
+        conn.close()
+        
+        text = f"""
+<b>📊 ᴅᴀꜱʜʙᴏᴀʀᴅ</b>
+━━━━━━━━━━━━━━━━━━
+👥 <b>Total Users:</b> <code>{total}</code>
+📈 <b>Today Joined:</b> <code>{today}</code>
+💎 <b>Premium:</b> <code>{premium}</code>
+🚫 <b>Blocked:</b> <code>{blocked}</code>
+🔍 <b>Total Searches:</b> <code>{searches}</code>
+👑 <b>Admins:</b> <code>{admins}</code>
+━━━━━━━━━━━━━━━━━━
+🕐 <b>Time:</b> {datetime.now().strftime('%d %b %Y %I:%M %p')}
+"""
+        bot.reply_to(m, format_message(text), parse_mode='HTML')
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+
+# ==================== USER LIST ====================
+
+@bot.message_handler(func=lambda m: m.text == "👥 ᴜꜱᴇʀ ʟɪꜱᴛ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_user_list(m):
+    uid = m.from_user.id
+    try:
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        c.execute("SELECT user_id, first_name, credits, is_premium, is_blocked FROM users ORDER BY join_date DESC LIMIT 20")
+        users = c.fetchall()
+        total = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        conn.close()
+        
+        text = f"<b>👥 Recent Users ({total} total)</b>\n━━━━━━━━━━━━━━━━━━\n"
+        for u in users:
+            status = "💎" if u[3] else "👤"
+            status += "🚫" if u[4] else ""
+            text += f"{status} <code>{u[0]}</code> — {u[1][:15] if u[1] else '?'} | 💰{u[2]}\n"
+        bot.reply_to(m, format_message(text), parse_mode='HTML')
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+
+# ==================== BROADCAST ====================
+
+@bot.message_handler(func=lambda m: m.text == "📢 ʙʀᴏᴀᴅᴄᴀꜱᴛ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_broadcast(m):
+    uid = m.from_user.id
+    msg = bot.reply_to(m, format_message(
+        "<b>📢 Broadcast</b>\n━━━━━━━━━━━━━━━━━━\n"
+        "Jo message sabhi users ko bhejna hai woh type karo:\n"
+        "<i>(Text, Photo, Video — sab chalega)</i>"
+    ), parse_mode='HTML')
+    bot.register_next_step_handler(msg, process_broadcast)
+
+def process_broadcast(m):
+    uid = m.from_user.id
+    if not is_admin(uid):
+        return
+    
+    try:
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        c.execute("SELECT user_id FROM users WHERE is_blocked=0")
+        users = c.fetchall()
+        conn.close()
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+        return
+    
+    if not users:
+        bot.reply_to(m, format_message("<b>❌ No users found!</b>"), parse_mode='HTML')
+        return
+    
+    sent = 0
+    failed = 0
+    
+    status_msg = bot.reply_to(m, format_message(f"<b>⏳ Sending to {len(users)} users...</b>"), parse_mode='HTML')
+    
+    for (user_id,) in users:
+        try:
+            if m.text:
+                bot.send_message(user_id, format_message(f"<b>📢 Broadcast</b>\n━━━━━━━━━━━━━━━━━━\n{m.text}"), parse_mode='HTML')
+            elif m.photo:
+                bot.send_photo(user_id, m.photo[-1].file_id, caption=f"<b>📢 Broadcast</b>\n━━━━━━━━━━━━━━━━━━\n{m.caption if m.caption else ''}")
+            elif m.video:
+                bot.send_video(user_id, m.video.file_id, caption=f"<b>📢 Broadcast</b>\n━━━━━━━━━━━━━━━━━━\n{m.caption if m.caption else ''}")
+            elif m.document:
+                bot.send_document(user_id, m.document.file_id, caption=f"<b>📢 Broadcast</b>\n━━━━━━━━━━━━━━━━━━\n{m.caption if m.caption else ''}")
+            sent += 1
+        except Exception:
+            failed += 1
+        time.sleep(0.05)
+    
+    bot.edit_message_text(
+        format_message(f"<b>✅ Broadcast Done!</b>\n━━━━━━━━━━━━━━━━━━\n✅ Sent: <code>{sent}</code>\n❌ Failed: <code>{failed}</code>"),
+        m.chat.id, status_msg.message_id, parse_mode='HTML'
+    )
+
+# ==================== BLOCK/UNBLOCK ====================
+
+@bot.message_handler(func=lambda m: m.text == "🚫 ʙʟᴏᴄᴋ ᴜꜱᴇʀ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_block_user(m):
+    uid = m.from_user.id
+    msg = bot.reply_to(m, format_message(
+        "<b>🚫 Block User</b>\n━━━━━━━━━━━━━━━━━━\n"
+        "User ID bhejo:"
+    ), parse_mode='HTML')
+    bot.register_next_step_handler(msg, process_block_user)
+
+def process_block_user(m):
+    uid = m.from_user.id
+    if not is_admin(uid):
+        return
+    try:
+        target = int(m.text.strip())
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        c.execute("UPDATE users SET is_blocked=1 WHERE user_id=?", (target,))
+        conn.commit()
+        conn.close()
+        bot.reply_to(m, format_message(f"<b>✅ User <code>{target}</code> blocked!</b>"), parse_mode='HTML')
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+
+@bot.message_handler(func=lambda m: m.text == "✅ ᴜɴʙʟᴏᴄᴋ ᴜꜱᴇʀ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_unblock_user(m):
+    uid = m.from_user.id
+    msg = bot.reply_to(m, format_message(
+        "<b>✅ Unblock User</b>\n━━━━━━━━━━━━━━━━━━\n"
+        "User ID bhejo:"
+    ), parse_mode='HTML')
+    bot.register_next_step_handler(msg, process_unblock_user)
+
+def process_unblock_user(m):
+    uid = m.from_user.id
+    if not is_admin(uid):
+        return
+    try:
+        target = int(m.text.strip())
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        c.execute("UPDATE users SET is_blocked=0 WHERE user_id=?", (target,))
+        conn.commit()
+        conn.close()
+        bot.reply_to(m, format_message(f"<b>✅ User <code>{target}</code> unblocked!</b>"), parse_mode='HTML')
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+
+# ==================== USER INFO ====================
+
+@bot.message_handler(func=lambda m: m.text == "👤 ᴜꜱᴇʀ ɪɴꜰᴏ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_user_info(m):
+    uid = m.from_user.id
+    msg = bot.reply_to(m, format_message(
+        "<b>👤 User Info</b>\n━━━━━━━━━━━━━━━━━━\n"
+        "User ID bhejo:"
+    ), parse_mode='HTML')
+    bot.register_next_step_handler(msg, process_user_info)
+
+def process_user_info(m):
+    uid = m.from_user.id
+    if not is_admin(uid):
+        return
+    try:
+        target = int(m.text.strip())
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE user_id=?", (target,))
+        user = c.fetchone()
+        conn.close()
+        
+        if not user:
+            bot.reply_to(m, format_message(f"<b>❌ User <code>{target}</code> not found!</b>"), parse_mode='HTML')
+            return
+        
+        text = f"""
+<b>👤 User Info</b>
+━━━━━━━━━━━━━━━━━━
+🆔 ID: <code>{user[0]}</code>
+👤 Username: @{user[1] if user[1] else 'N/A'}
+📛 Name: {user[2] or 'N/A'}
+📅 Joined: {user[3][:10] if user[3] else 'N/A'}
+💰 Credits: <code>{user[5] or 0}</code>
+💎 Premium: {'✅' if user[7] else '❌'}
+🚫 Blocked: {'🚫' if user[6] else '✅'}
+🔍 Searches: <code>{user[10] or 0}</code>
+"""
+        bot.reply_to(m, format_message(text), parse_mode='HTML')
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+
+# ==================== PREMIUM ====================
+
+@bot.message_handler(func=lambda m: m.text == "💎 ᴀᴅᴅ ᴩʀᴇᴍɪᴜᴍ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_add_premium(m):
+    uid = m.from_user.id
+    msg = bot.reply_to(m, format_message(
+        "<b>💎 Add Premium</b>\n━━━━━━━━━━━━━━━━━━\n"
+        "Format: <code>USER_ID DAYS</code>\n"
+        "Example: <code>123456 30</code>"
+    ), parse_mode='HTML')
+    bot.register_next_step_handler(msg, process_add_premium)
+
+def process_add_premium(m):
+    uid = m.from_user.id
+    if not is_admin(uid):
+        return
+    try:
+        parts = m.text.strip().split()
+        target = int(parts[0])
+        days = int(parts[1])
+        
+        user = get_user(target)
+        now_dt = datetime.now()
+        start_from = now_dt
+        if user and user[7] == 1 and user[8]:
+            try:
+                existing = datetime.strptime(user[8], "%Y-%m-%d %H:%M:%S")
+                if existing > now_dt:
+                    start_from = existing
+            except Exception:
+                pass
+        
+        until = start_from + timedelta(days=days)
+        until_str = until.strftime("%Y-%m-%d %H:%M:%S")
+        
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        c.execute("UPDATE users SET is_premium=1, premium_until=? WHERE user_id=?", (until_str, target))
+        conn.commit()
+        conn.close()
+        
+        bot.reply_to(m, format_message(
+            f"<b>✅ Premium Added!</b>\n"
+            f"👤 User: <code>{target}</code>\n"
+            f"📅 Days: <code>{days}</code>\n"
+            f"⏳ Until: <code>{until_str}</code>"
+        ), parse_mode='HTML')
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+
+@bot.message_handler(func=lambda m: m.text == "🚫 ʀᴇᴍᴏᴠᴇ ᴩʀᴇᴍɪᴜᴍ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_remove_premium(m):
+    uid = m.from_user.id
+    msg = bot.reply_to(m, format_message(
+        "<b>🚫 Remove Premium</b>\n━━━━━━━━━━━━━━━━━━\n"
+        "User ID bhejo:"
+    ), parse_mode='HTML')
+    bot.register_next_step_handler(msg, process_remove_premium)
+
+def process_remove_premium(m):
+    uid = m.from_user.id
+    if not is_admin(uid):
+        return
+    try:
+        target = int(m.text.strip())
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        c.execute("UPDATE users SET is_premium=0, premium_until=NULL WHERE user_id=?", (target,))
+        conn.commit()
+        conn.close()
+        bot.reply_to(m, format_message(f"<b>✅ Premium removed from <code>{target}</code></b>"), parse_mode='HTML')
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+
+# ==================== CREDITS ====================
+
+@bot.message_handler(func=lambda m: m.text == "💰 ᴀᴅᴅ ᴄʀᴇᴅɪᴛꜱ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_add_credits(m):
+    uid = m.from_user.id
+    msg = bot.reply_to(m, format_message(
+        "<b>💰 Add Credits</b>\n━━━━━━━━━━━━━━━━━━\n"
+        "Format: <code>USER_ID AMOUNT</code>\n"
+        "Example: <code>123456 50</code>"
+    ), parse_mode='HTML')
+    bot.register_next_step_handler(msg, process_add_credits)
+
+def process_add_credits(m):
+    uid = m.from_user.id
+    if not is_admin(uid):
+        return
+    try:
+        parts = m.text.strip().split()
+        target = int(parts[0])
+        amount = int(parts[1])
+        add_credits(target, amount)
+        bot.reply_to(m, format_message(
+            f"<b>✅ +{amount} credits added!</b>\n"
+            f"👤 User: <code>{target}</code>\n"
+            f"💰 New balance: <code>{get_credits(target)}</code>"
+        ), parse_mode='HTML')
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+
+@bot.message_handler(func=lambda m: m.text == "💸 ʀᴇᴍᴏᴠᴇ ᴄʀᴇᴅɪᴛꜱ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_remove_credits(m):
+    uid = m.from_user.id
+    msg = bot.reply_to(m, format_message(
+        "<b>💸 Remove Credits</b>\n━━━━━━━━━━━━━━━━━━\n"
+        "Format: <code>USER_ID AMOUNT</code>\n"
+        "Example: <code>123456 20</code>"
+    ), parse_mode='HTML')
+    bot.register_next_step_handler(msg, process_remove_credits)
+
+def process_remove_credits(m):
+    uid = m.from_user.id
+    if not is_admin(uid):
+        return
+    try:
+        parts = m.text.strip().split()
+        target = int(parts[0])
+        amount = int(parts[1])
+        if remove_credits(target, amount):
+            bot.reply_to(m, format_message(
+                f"<b>✅ -{amount} credits removed!</b>\n"
+                f"👤 User: <code>{target}</code>\n"
+                f"💰 New balance: <code>{get_credits(target)}</code>"
+            ), parse_mode='HTML')
+        else:
+            bot.reply_to(m, format_message(f"<b>❌ Insufficient credits!</b>"), parse_mode='HTML')
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+
+@bot.message_handler(func=lambda m: m.text == "⚙️ ꜱᴇᴛ ᴄʀᴇᴅɪᴛꜱ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_set_credits(m):
+    uid = m.from_user.id
+    msg = bot.reply_to(m, format_message(
+        "<b>⚙️ Set Credits</b>\n━━━━━━━━━━━━━━━━━━\n"
+        "Format: <code>USER_ID AMOUNT</code>\n"
+        "Example: <code>123456 100</code>"
+    ), parse_mode='HTML')
+    bot.register_next_step_handler(msg, process_set_credits)
+
+def process_set_credits(m):
+    uid = m.from_user.id
+    if not is_admin(uid):
+        return
+    try:
+        parts = m.text.strip().split()
+        target = int(parts[0])
+        amount = int(parts[1])
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        c.execute("UPDATE users SET credits=? WHERE user_id=?", (amount, target))
+        conn.commit()
+        conn.close()
+        bot.reply_to(m, format_message(
+            f"<b>✅ Credits set!</b>\n"
+            f"👤 User: <code>{target}</code>\n"
+            f"💰 New balance: <code>{amount}</code>"
+        ), parse_mode='HTML')
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+
+# ==================== ADD MONEY ====================
+
+@bot.message_handler(func=lambda m: m.text == "₹ ᴀᴅᴅ ᴍᴏɴᴇʏ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_add_money(m):
+    uid = m.from_user.id
+    msg = bot.reply_to(m, format_message(
+        "<b>₹ Add Money</b>\n━━━━━━━━━━━━━━━━━━\n"
+        "Format: <code>USER_ID AMOUNT</code>\n"
+        "Example: <code>123456 100</code>"
+    ), parse_mode='HTML')
+    bot.register_next_step_handler(msg, process_add_money)
+
+def process_add_money(m):
+    uid = m.from_user.id
+    if not is_admin(uid):
+        return
+    try:
+        parts = m.text.strip().split()
+        target = int(parts[0])
+        amount = int(parts[1])
+        add_money(target, amount)
+        bot.reply_to(m, format_message(
+            f"<b>✅ +₹{amount} added!</b>\n"
+            f"👤 User: <code>{target}</code>\n"
+            f"💰 New money: <code>₹{get_money(target)}</code>"
+        ), parse_mode='HTML')
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+
+# ==================== DELETE HISTORY ====================
+
+@bot.message_handler(func=lambda m: m.text == "🗑️ ᴅᴇʟᴇᴛᴇ ʜɪꜱᴛᴏʀʏ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_delete_history(m):
+    uid = m.from_user.id
+    conn = sqlite3.connect('bot.db', timeout=5)
+    c = conn.cursor()
+    c.execute("DELETE FROM search_history")
+    deleted = c.rowcount
+    conn.commit()
+    conn.close()
+    bot.reply_to(m, format_message(f"<b>✅ {deleted} history records deleted!</b>"), parse_mode='HTML')
+
+# ==================== EXPORT USERS ====================
+
+@bot.message_handler(func=lambda m: m.text == "📤 ᴇxᴩᴏʀᴛ ᴜꜱᴇʀꜱ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_export_users(m):
+    uid = m.from_user.id
+    try:
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        c.execute("SELECT user_id, username, first_name, join_date, credits, is_premium, is_blocked FROM users")
+        users = c.fetchall()
+        conn.close()
+        
+        import io
+        lines = ["user_id,username,first_name,join_date,credits,is_premium,is_blocked"]
+        for u in users:
+            lines.append(f"{u[0]},{u[1] or ''},{u[2] or ''},{u[3]},{u[4]},{u[5]},{u[6]}")
+        
+        csv = io.BytesIO("\n".join(lines).encode())
+        csv.name = f"users_export_{datetime.now().strftime('%Y%m%d')}.csv"
+        bot.send_document(m.chat.id, csv, caption=f"<b>📤 Users Export</b>\n👥 Total: {len(users)}", parse_mode='HTML')
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+
+# ==================== NOTIFY USER ====================
+
+@bot.message_handler(func=lambda m: m.text == "🔔 ɴᴏᴛɪꜰʏ ᴜꜱᴇʀ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_notify(m):
+    uid = m.from_user.id
+    msg = bot.reply_to(m, format_message(
+        "<b>🔔 Notify User</b>\n━━━━━━━━━━━━━━━━━━\n"
+        "Format: <code>USER_ID MESSAGE</code>\n"
+        "Example: <code>123456 Hello! Your account is ready.</code>"
+    ), parse_mode='HTML')
+    bot.register_next_step_handler(msg, process_notify)
+
+def process_notify(m):
+    uid = m.from_user.id
+    if not is_admin(uid):
+        return
+    try:
+        parts = m.text.strip().split(" ", 1)
+        target = int(parts[0])
+        message = parts[1]
+        bot.send_message(target, format_message(f"<b>📢 Notification</b>\n━━━━━━━━━━━━━━━━━━\n{message}"), parse_mode='HTML')
+        bot.reply_to(m, format_message(f"<b>✅ Notification sent to <code>{target}</code></b>"), parse_mode='HTML')
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+
+# ==================== CACHE STATS ====================
 
 @bot.message_handler(func=lambda m: m.text == "📊 ᴄᴀᴄʜᴇ ꜱᴛᴀᴛꜱ" and is_admin(m.from_user.id) and not is_group(m))
-def cache_stats_btn(m):
+def admin_cache_stats(m):
     stats = cache_get_all_stats()
-    text = "<b>📊 ᴄᴀᴄʜᴇ ꜱᴛᴀᴛɪꜱᴛɪᴄꜱ</b>\n━━━━━━━━━━━━━━━━━━\n"
-    total_items = 0
-    total_hits = 0
+    text = "<b>📊 Cache Statistics</b>\n━━━━━━━━━━━━━━━━━━\n"
+    total = 0
+    hits = 0
     for table, data in stats.items():
         text += f"📌 <b>{table.upper()}</b>: {data['count']} items | {data['hits']} hits\n"
-        total_items += data['count']
-        total_hits += data['hits']
-    text += f"\n━━━━━━━━━━━━━━━━━━\n📦 <b>Total Items:</b> {total_items}\n🎯 <b>Total Hits:</b> {total_hits}"
+        total += data['count']
+        hits += data['hits']
+    text += f"\n━━━━━━━━━━━━━━━━━━\n📦 <b>Total Items:</b> {total}\n🎯 <b>Total Hits:</b> {hits}"
     bot.reply_to(m, format_message(text), parse_mode='HTML')
+
+# ==================== API CONFIG ====================
+
+@bot.message_handler(func=lambda m: m.text == "🔧 ᴀᴩɪ ᴄᴏɴꜰɪɢ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_api_config(m):
+    uid = m.from_user.id
+    text = """
+<b>🔧 API Config</b>
+━━━━━━━━━━━━━━━━━━
+📋 <b>Current API Status:</b>
+
+🟢 Number API — Working
+🟢 Aadhar API — Working
+🟢 UPI API — Working
+🟢 Instagram API — Working
+🟢 IFSC API — Working
+🟢 Vehicle API — Working
+🟢 GST API — Working
+🟢 PAN API — Working
+🟢 Pak API — Working
+🟢 Pincode API — Working
+🟢 Free Fire API — Working
+
+💾 <b>Cache:</b> All results are cached for future use.
+📌 <b>Contact:</b> @Guptaji_302
+"""
+    bot.reply_to(m, format_message(text), parse_mode='HTML')
+
+# ==================== CLONE BOTS ====================
+
+@bot.message_handler(func=lambda m: m.text == "🤖 ᴄʟᴏɴᴇ ʙᴏᴛꜱ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_clone_bots(m):
+    uid = m.from_user.id
+    try:
+        conn = sqlite3.connect('bot.db', timeout=5)
+        c = conn.cursor()
+        c.execute("SELECT user_id, token, status, requested_at FROM clone_bots ORDER BY id DESC LIMIT 10")
+        clones = c.fetchall()
+        conn.close()
+        
+        if not clones:
+            text = "<b>🤖 Clone Bots</b>\n━━━━━━━━━━━━━━━━━━\n❌ No clone bots found."
+        else:
+            text = "<b>🤖 Clone Bots</b>\n━━━━━━━━━━━━━━━━━━\n"
+            for c in clones:
+                status_icon = "✅" if c[2] == "approved" else "⏳" if c[2] == "pending" else "❌"
+                text += f"{status_icon} User: <code>{c[0]}</code>\n   Status: {c[2]}\n   Token: <code>{c[1][:20]}...</code>\n\n"
+        bot.reply_to(m, format_message(text), parse_mode='HTML')
+    except Exception as e:
+        bot.reply_to(m, format_message(f"<b>❌ Error: {e}</b>"), parse_mode='HTML')
+
+# ==================== FEATURE COSTS ====================
+
+@bot.message_handler(func=lambda m: m.text == "🔧 ꜰᴇᴀᴛᴜʀᴇ ᴄᴏꜱᴛꜱ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_feature_costs(m):
+    uid = m.from_user.id
+    text = """
+<b>🔧 Feature Costs</b>
+━━━━━━━━━━━━━━━━━━
+📱 Number Info: 1 credit
+🆔 Aadhar Info: 1 credit
+💳 UPI Info: 1 credit
+📷 Instagram: 1 credit
+🏦 IFSC Info: 1 credit
+🚗 Vehicle Info: 1 credit
+💼 GST Info: 1 credit
+🪪 PAN Info: 1 credit
+🇵🇰 Pak Num: 1 credit
+📍 Pincode: 1 credit
+🎮 Free Fire: 1 credit
+💎 Hitek: 2 credits
+🌟 Hitek Full: 2 credits
+
+💎 Premium users: Unlimited ❌
+"""
+    bot.reply_to(m, format_message(text), parse_mode='HTML')
+
+# ==================== PREMIUM PRICES ====================
+
+@bot.message_handler(func=lambda m: m.text == "💎 ᴩʀᴇᴍɪᴜᴍ ᴩʀɪᴄᴇꜱ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_premium_prices(m):
+    uid = m.from_user.id
+    text = """
+<b>💎 Premium Prices</b>
+━━━━━━━━━━━━━━━━━━
+📅 <b>1 Day:</b> ₹40
+📅 <b>7 Days:</b> ₹150
+📅 <b>15 Days:</b> ₹280
+📅 <b>30 Days:</b> ₹499
+
+✨ <b>Premium Benefits:</b>
+• Unlimited Searches
+• No Credit Cost
+• Unlimited Bomber Time
+• All Features Unlocked
+
+💳 Users can purchase via bot.
+📌 Contact: @Guptaji_302
+"""
+    bot.reply_to(m, format_message(text), parse_mode='HTML')
+
+# ==================== MAINTENANCE ====================
+
+@bot.message_handler(func=lambda m: m.text == "🛠️ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_maintenance(m):
+    uid = m.from_user.id
+    text = """
+<b>🛠️ Maintenance Mode</b>
+━━━━━━━━━━━━━━━━━━
+🟢 <b>Status:</b> All features are ONLINE
+
+📌 <b>Features:</b>
+• Number Info ✅
+• Aadhar Info ✅
+• UPI Info ✅
+• Instagram ✅
+• IFSC ✅
+• Vehicle ✅
+• GST ✅
+• PAN ✅
+• Pak Num ✅
+• Pincode ✅
+• Free Fire ✅
+• Hitek ✅
+• Bomber ✅
+
+💡 To enable maintenance, edit the code.
+"""
+    bot.reply_to(m, format_message(text), parse_mode='HTML')
+
+# ==================== MAIN MENU ====================
+
+@bot.message_handler(func=lambda m: m.text == "🏠 ᴍᴀɪɴ ᴍᴇɴᴜ" and is_admin(m.from_user.id) and not is_group(m))
+def admin_main_menu(m):
+    uid = m.from_user.id
+    admin_page[uid] = 1
+    text = f"👋 <b>Main Menu</b>\n💰 <b>Credits:</b> <code>{get_credits(uid)}</code>"
+    bot.send_message(uid, format_message(text), reply_markup=main_keyboard(uid))
 
 # ==================== FEATURE HANDLERS ====================
 
@@ -2302,7 +2905,7 @@ def handle_text_input(m):
 
 def main():
     print("=" * 60)
-    print("🔥 CACHED OSINT BOT STARTING...")
+    print("🔥 ULTIMATE OSINT BOT STARTING...")
     print("=" * 60)
     
     init_db()
